@@ -701,8 +701,9 @@ async function saveMoveSite(siteName, fromDate, toDate) {
 async function saveDoneItem(itemId, checked) {
   if(!itemId) return;
   const status = checked ? '완료' : '대기';
-  await SB.update('shipment_orders', itemId, {완료여부: status});
-  console.log(`[DB] 완료 상태 저장: id=${itemId} → ${status}`);
+  const today = checked ? new Date().toLocaleDateString('ko-KR', {month:'numeric', day:'numeric'}).replace(/ /g,'') : null;
+  await SB.update('shipment_orders', itemId, {완료여부: status, 완료일: today});
+  console.log(`[DB] 완료 상태 저장: id=${itemId} → ${status} (${today})`);
 }
 
 // ── 재고 차감/복원 ──
@@ -1221,6 +1222,8 @@ function renderSchedDateList(){
     const hasIssue = filtered.some(site => site.stock_issues && site.stock_issues.length > 0);
     const jjCnt = route.filter(s=>s.driver==='전종복 부장').length;
     const nhCnt = route.filter(s=>s.driver==='노영호 차장').length;
+    const dateItems = RAW.filter(r => r.출고일 === date);
+    const allDone = dateItems.length > 0 && dateItems.every(r => r.완료여부 === '완료');
 
     const item = document.createElement('div');
     item.className = 'sched-date-item' + (date === currentSchedDate ? ' active' : '');
@@ -1229,7 +1232,7 @@ function renderSchedDateList(){
       <div class="sched-date-meta">
         <span>${filtered.length}곳</span>
         <span>${s.total_km>0?s.total_km+'km':'-'}</span>
-        ${hasIssue?'<span style="color:var(--danger)">⚠️재고</span>':'<span style="color:var(--success)">✅</span>'}
+        ${hasIssue?'<span style="color:var(--danger)">⚠️재고</span>':allDone?'<span style="color:var(--success)">✅</span>':''}
       </div>
       ${schedDriver==='all'?`<div style="display:flex;gap:6px;margin-top:5px;">
         ${jjCnt>0?`<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:var(--jj-light);color:var(--jj);">전종복 ${jjCnt}곳</span>`:''}
