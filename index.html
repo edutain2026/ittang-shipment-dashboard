@@ -425,6 +425,7 @@ td.date{font-family:var(--mono);font-size:11px;}
     <div class="map-container">
       <div id="naver-map"></div>
       <div class="map-status hidden" id="map-status"></div>
+      <button id="full-navi-btn" onclick="openFullNavigation(currentMapCoords)" style="display:none;position:absolute;bottom:20px;left:10px;z-index:1000;background:#03C75A;color:#fff;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;align-items:center;gap:5px;box-shadow:0 2px 10px rgba(0,0,0,.28);font-family:'Noto Sans KR',sans-serif;">🧭 전체 경유 네비</button>
       <div class="map-legend-box">
         <div class="leg-row"><div class="leg-dot" style="background:#7B3FA0"></div>전종복 부장</div>
         <div class="leg-row"><div class="leg-dot" style="background:#1A6B8C"></div>노영호 차장</div>
@@ -1617,7 +1618,7 @@ function showDoneToast(siteName, itemName, count){
 // ──────────────────────────────────────────────
 // 네이버 지도 연동 (Client ID: snx4jy15pq)
 // ──────────────────────────────────────────────
-let naverMap=null,mapInited=false,markers=[],routeLine=null,infoWindows=[];
+let naverMap=null,mapInited=false,markers=[],routeLine=null,infoWindows=[],currentMapCoords=[];
 let geocodeCache={},mapDriverCurrent='all';
 const DRIVER_COLORS={'전종복 부장':'#7B3FA0','노영호 차장':'#1A6B8C','':'#2B5CE6'};
 
@@ -1745,13 +1746,14 @@ function drawMap(coords){
     infoWindows.push(iw);
     path.push(pos);
   });
-  // 루트 라인
-  if(path.length>1){
-    routeLine=new naver.maps.Polyline({
-      path,map:naverMap,
-      strokeColor:'#E63030',strokeWeight:2.5,strokeOpacity:.75,
-      strokeStyle:'dash'
-    });
+  // 현재 coords 저장 (전체 네비 버튼용)
+  currentMapCoords=coords;
+  // 전체 경유 네비 버튼 표시
+  const fullNaviBtn=document.getElementById('full-navi-btn');
+  if(fullNaviBtn) fullNaviBtn.style.display=valid.length>0?'flex':'none';
+  // 루트 라인 (OSRM 실제 도로 경로)
+  if(valid.length>1){
+    drawOSRMRoute(valid);
   }
   // 지도 뷰 맞추기
   if(path.length===1){
@@ -1770,6 +1772,60 @@ function clearMap(){
   infoWindows.forEach(w=>w.close());
   infoWindows=[];
   if(routeLine){routeLine.setMap(null);routeLine=null;}
+  const fullNaviBtn=document.getElementById('full-navi-btn');
+  if(fullNaviBtn) fullNaviBtn.style.display='none';
+}
+
+// OSRM 실제 도로 경로 그리기
+async function drawOSRMRoute(validCoords){
+  const coordStr=validCoords.map(c=>`${c.lng},${c.lat}`).join(';');
+  try{
+    const res=await fetch(`https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    if(data.code!=='Ok'||!data.routes||!data.routes[0]) throw new Error('경로 없음');
+    const roadPath=data.routes[0].geometry.coordinates.map(([lng,lat])=>new naver.maps.LatLng(lat,lng));
+    routeLine=new naver.maps.Polyline({
+      path:roadPath,map:naverMap,
+      strokeColor:'#E63030',strokeWeight:4,strokeOpacity:0.85
+    });
+  }catch(e){
+    console.warn('[OSRM] 실패 → 직선 대체:', e.message);
+    const fallbackPath=validCoords.map(c=>new naver.maps.LatLng(c.lat,c.lng));
+    routeLine=new naver.maps.Polyline({
+      path:fallbackPath,map:naverMap,
+      strokeColor:'#E63030',strokeWeight:2.5,strokeOpacity:0.75,strokeStyle:'dash'
+    });
+  }
+}
+
+// 전체 경유지 네비게이션 앱 열기
+function openFullNavigation(coords){
+  const valid=coords.filter(c=>c.lat);
+  if(!valid.length){alert('표시된 납품처가 없습니다.');return;}
+  if(valid.length===1){
+    const c=valid[0];
+    const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+    if(isMobile) location.href=`nmap://route/car?dlat=${c.lat}&dlng=${c.lng}&dname=${encodeURIComponent(c.site.name)}&appname=ittang.delivery`;
+    else window.open(`https://map.naver.com/v5/directions/-/-/${c.lng},${c.lat},${encodeURIComponent(c.site.name)}/-/car`,'_blank');
+    return;
+  }
+  const first=valid[0];
+  const last=valid[valid.length-1];
+  const middles=valid.slice(1,-1);
+  // 네이버 앱 딥링크 (모바일)
+  const viaStr=middles.map(c=>`${c.lat},${c.lng},${encodeURIComponent(c.site.name)}`).join('|');
+  const naverApp=`nmap://route/car?slat=${first.lat}&slng=${first.lng}&sname=${encodeURIComponent(first.site.name)}&dlat=${last.lat}&dlng=${last.lng}&dname=${encodeURIComponent(last.site.name)}${viaStr?'&via='+viaStr:''}&appname=ittang.delivery`;
+  // 구글맵 웹 (PC / 앱 없을 때 대체)
+  const gPath=valid.map(c=>`${c.lat},${c.lng}`).join('/');
+  const googleUrl=`https://www.google.com/maps/dir/${gPath}`;
+  const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+  if(isMobile){
+    location.href=naverApp;
+    setTimeout(()=>window.open(googleUrl,'_blank'),1500);
+  } else {
+    window.open(googleUrl,'_blank');
+  }
 }
 
 function updateSiteList(sites){
@@ -2010,81 +2066,4 @@ function toggleAllSuggest(chk){
 }
 
 function goToCalendar(){
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById('tab-calendar').classList.add('active');
-  const btns = document.querySelectorAll('.tab-btn');
-  btns.forEach(b=>{ if(b.textContent.includes('달력')) b.classList.add('active'); });
-  renderCalendar();
-}
-function goToSchedule(){
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  document.getElementById('tab-schedule').classList.add('active');
-  const btns = document.querySelectorAll('.tab-btn');
-  btns.forEach(b=>{ if(b.textContent.includes('스케줄')) b.classList.add('active'); });
-  initSchedule();
-}
-
-// ── 초기화 ──
-function initFilters(){
-  const dates=[...new Set(RAW.map(r=>r.출고일).filter(Boolean))].sort();
-  // 다중선택 날짜 체크박스 생성
-  const list=document.getElementById('date-multi-list');
-  dates.forEach(d=>{
-    const item=document.createElement('div');
-    item.className='date-multi-item';
-    item.innerHTML=`<input type="checkbox" id="dchk-${d}" value="${d}" onchange="onDateCheckChange()"><label for="dchk-${d}">${d}</label>`;
-    list.appendChild(item);
-  });
-
-  const persons=[...new Set(RAW.map(r=>r.출고담당자).filter(Boolean))].sort();
-  const pe=document.getElementById('filter-person');
-  persons.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;pe.appendChild(o);});
-  const cats=[...new Set(STOCK.map(r=>r.제품군).filter(Boolean))].sort();
-  const ce=document.getElementById('stock-cat');
-  cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;ce.appendChild(o);});
-
-  // 외부 클릭 시 드롭다운 닫기
-  document.addEventListener('click',e=>{
-    const wrap=document.getElementById('date-multi-wrap');
-    if(wrap&&!wrap.contains(e.target)) closeDateDropdown();
-  });
-}
-
-function toggleDateDropdown(e){
-  e.stopPropagation();
-  const dd=document.getElementById('date-multi-dropdown');
-  const btn=document.getElementById('date-multi-btn');
-  dd.classList.toggle('open');
-  btn.classList.toggle('active',dd.classList.contains('open'));
-}
-function closeDateDropdown(){
-  document.getElementById('date-multi-dropdown').classList.remove('open');
-  document.getElementById('date-multi-btn').classList.remove('active');
-}
-function getSelectedDates(){
-  return [...document.querySelectorAll('#date-multi-list input[type=checkbox]:checked')].map(cb=>cb.value);
-}
-function updateDateBtn(){
-  const sel=getSelectedDates();
-  const btn=document.getElementById('date-multi-btn');
-  if(sel.length===0) btn.textContent='전체';
-  else if(sel.length===1) btn.textContent=sel[0];
-  else btn.textContent=`${sel[0]} 외 ${sel.length-1}개`;
-  // 화살표 재추가 (textContent로 덮어씌워지므로 CSS ::after 유지됨)
-}
-function onDateCheckChange(){
-  updateDateBtn();
-  renderShipment();
-}
-function clearDateFilter(){
-  document.querySelectorAll('#date-multi-list input[type=checkbox]').forEach(cb=>cb.checked=false);
-  updateDateBtn();
-  renderShipment();
-}
-loadData();
-</script>
-</script>
-</body>
-</html>
+  document.querySelectorAll('.tab-btn
