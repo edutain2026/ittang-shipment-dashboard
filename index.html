@@ -2068,6 +2068,13 @@ function toggleAllSuggest(chk){
 function goToCalendar(){
   document.querySelectorAll('.tab-btn')[4].click();
 }
+
+// ── 앱 시작: 데이터 로드 (복구됨 2026-07-06) ──
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", loadData);
+} else {
+  loadData();
+}
 </script>
 </body>
 </html>
