@@ -1619,7 +1619,7 @@ function showDoneToast(siteName, itemName, count){
 // 네이버 지도 연동 (Client ID: snx4jy15pq)
 // ──────────────────────────────────────────────
 let naverMap=null,mapInited=false,markers=[],routeLine=null,infoWindows=[],currentMapCoords=[];
-let geocodeCache={},mapDriverCurrent='all';
+let geocodeCache=(function(){try{return JSON.parse(localStorage.getItem('ittangGeocodeCache')||'{}');}catch(e){return {};}})(),mapDriverCurrent='all';
 const DRIVER_COLORS={'전종복 부장':'#7B3FA0','노영호 차장':'#1A6B8C','':'#2B5CE6'};
 
 function initMap(){
@@ -1660,13 +1660,25 @@ function onMapDateChange(){
 // 단일 지오코딩 시도
 function naverGeocodeOnce(address){
   return new Promise((resolve)=>{
-    naver.maps.Service.geocode({query:address},function(status,response){
-      if(status===naver.maps.Service.Status.ERROR||!response.v2||!response.v2.addresses||!response.v2.addresses.length){
+    let tries=0;
+    const attempt=()=>{
+      // 지오코더 스크립트가 아직 로드 전이면 잠시 기다렸다 재시도
+      if(!(window.naver&&naver.maps&&naver.maps.Service&&naver.maps.Service.geocode)){
+        if(tries++<6){setTimeout(attempt,600);return;}
         resolve(null);return;
       }
-      const r=response.v2.addresses[0];
-      resolve({lat:parseFloat(r.y),lng:parseFloat(r.x)});
-    });
+      naver.maps.Service.geocode({query:address},function(status,response){
+        // 일시적 오류(ERROR)는 잠깐 뒤 재시도
+        if(status===naver.maps.Service.Status.ERROR){
+          if(tries++<3){setTimeout(attempt,700);return;}
+          resolve(null);return;
+        }
+        if(!response||!response.v2||!response.v2.addresses||!response.v2.addresses.length){resolve(null);return;}
+        const r=response.v2.addresses[0];
+        resolve({lat:parseFloat(r.y),lng:parseFloat(r.x)});
+      });
+    };
+    attempt();
   });
 }
 
@@ -1717,7 +1729,7 @@ async function loadMapForDate(date){
     if(geocodeCache[s.addr]){coords.push({...geocodeCache[s.addr],site:s});continue;}
     const addr=s.addr.replace(/,.*$/,'').trim();
     const c=await naverGeocode(addr);
-    if(c){geocodeCache[s.addr]=c;coords.push({...c,site:s});}
+    if(c){geocodeCache[s.addr]=c;try{localStorage.setItem('ittangGeocodeCache',JSON.stringify(geocodeCache));}catch(e){}coords.push({...c,site:s});}
     else coords.push({lat:null,lng:null,site:s});
   }
   prog.style.display='none';
