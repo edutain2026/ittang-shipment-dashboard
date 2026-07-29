@@ -244,7 +244,7 @@ td.date{font-family:var(--mono);font-size:11px;}
 
 <div class="header">
   <div class="header-logo">아이땅 <span>출고관리</span> 대시보드</div>
-  <div class="header-meta">PROTOTYPE v0.3 · 2026.06</div>
+  <div class="header-meta">📖 조회 전용 · v0.4 · 2026.07</div>
 </div>
 
 <div class="tab-nav">
@@ -583,6 +583,12 @@ const SB = {
     if (!res.ok) console.error(`[delete ${table}]`, await res.text());
   }
 };
+
+// ── 조회 전용 모드 (플랜A): 웹앱에서 DB 쓰기 전면 차단 ──
+SB.update=async function(){console.log("[조회전용] DB 쓰기 차단됨");};
+SB.upsert=async function(){console.log("[조회전용] DB 쓰기 차단됨");return [];};
+SB.insert=async function(){console.log("[조회전용] DB 쓰기 차단됨");return [];};
+SB.deleteRow=async function(){console.log("[조회전용] DB 쓰기 차단됨");};
 
 // ── ③ 데이터 변수 (비워두고 loadData()에서 채움) ──
 let RAW = [], DONE = [], STOCK = [];
@@ -999,8 +1005,8 @@ function renderCalendar(){
     sites.slice(0,3).forEach(([site,dr])=>{
       const chip=document.createElement('div');
       chip.className=`cal-chip ${cc(dr)}${movedSites.has(site)?' moved':''}`;
-      chip.title=`${site} — 클릭: 날짜이동 / 드래그: 다른 날짜로 이동`;
-      chip.draggable=true;
+      chip.title=`${site} (조회 전용 — 출고일 변경은 구글 시트에서)`;
+      chip.draggable=false;
       chip.dataset.site=site;
       chip.dataset.date=dateStr;
       chip.innerHTML=`<span class="chip-dot" style="background:${dc(dr)}"></span>${trunc(site,13)}`;
@@ -1008,7 +1014,7 @@ function renderCalendar(){
       // ── A방식: 클릭으로 모달 이동 ──
       chip.addEventListener('click', e=>{
         e.stopPropagation();
-        openMoveModal(site, dateStr);
+        /* 조회 전용: 이동 비활성화 */
       });
 
       // ── B방식: 드래그 시작 ──
@@ -1331,7 +1337,7 @@ function renderSchedDetail(date){
     const detailRows = rawItems.map((r,j)=>{
       const rawIdx = RAW.indexOf(r);
       return `<div class="step-item-row ${r._done?'item-done':''}" id="item-row-${rawIdx}">
-        <input class="item-chk" type="checkbox" ${r._done?'checked':''} onchange="toggleItemDone(${rawIdx}, this.checked, '${date}')">
+        <span style="width:15px;display:inline-block;"></span>
         <span class="item-name">${r.품목명}</span>
         <span class="item-pn">${r.품번}</span>
         <span class="item-qty">×${r.수량}</span>
@@ -1362,7 +1368,7 @@ function renderSchedDetail(date){
         <div class="step-detail" id="${detailId}">
           <div class="step-detail-header">
             <span>납품 품목 ${totalItems}건 · 완료 ${doneItems}건</span>
-            <button class="complete-all-btn" onclick="completeAllItems('${site.name}','${date}')">전체 완료</button>
+            
           </div>
           ${detailRows || '<div style="padding:12px;color:var(--text-muted);font-size:12px;">품목 정보 없음</div>'}
         </div>
