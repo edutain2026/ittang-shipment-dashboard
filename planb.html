@@ -863,9 +863,9 @@ function renderBarChart(id,data,max){
 }
 function renderCharts(){
   const sm={};RAW.forEach(r=>{if(r.영업담당자)sm[r.영업담당자]=(sm[r.영업담당자]||0)+1;});
-  const sa=Object.entries(sm).sort((a,b)=>b[1]-a[1]);renderBarChart('chart-sales',sa,sa[0][1]);
+  const sa=Object.entries(sm).sort((a,b)=>b[1]-a[1]);renderBarChart('chart-sales',sa,sa.length?sa[0][1]:1);
   const mm={};RAW.forEach(r=>{const m=r.납품방법||'미지정';mm[m]=(mm[m]||0)+1;});
-  const ma=Object.entries(mm).sort((a,b)=>b[1]-a[1]);renderBarChart('chart-method',ma,ma[0][1]);
+  const ma=Object.entries(mm).sort((a,b)=>b[1]-a[1]);renderBarChart('chart-method',ma,ma.length?ma[0][1]:1);
 }
 function renderThisWeek(){
   const today=new Date();const mon=new Date(today);mon.setDate(today.getDate()-today.getDay()+1);
