@@ -2313,22 +2313,20 @@ function pbHandleFile(e){
       var wb=XLSX.read(ev.target.result,{type:'array',cellDates:true});
       PB={orders:null,stock:null,done:null};
       var found=[];
+      // 각 탭을 이름 + 열 제목(내용) 모두로 판별 (모든 탭 검사)
       wb.SheetNames.forEach(function(nm){
-        var rows;
-        if(!PB.orders&&(nm.indexOf('raw')>-1||nm.indexOf('출고지시')>-1||nm.indexOf('주문서')>-1)){rows=pbRowsFrom(wb.Sheets[nm]);PB.orders=pbBuildOrders(rows);found.push('출고지시('+nm+'): '+PB.orders.length+'건');}
-        else if(!PB.stock&&nm.indexOf('가용재고')>-1){rows=pbRowsFrom(wb.Sheets[nm]);PB.stock=pbBuildStock(rows);found.push('재고('+nm+'): '+PB.stock.length+'건');}
-        else if(!PB.done&&nm.indexOf('출고완료')>-1){rows=pbRowsFrom(wb.Sheets[nm]);PB.done=pbBuildDone(rows);found.push('출고완료('+nm+'): '+PB.done.length+'건');}
+        var rows=pbRowsFrom(wb.Sheets[nm]);
+        var hr=pbHeaderRow(rows);
+        var hdr=(rows[hr]||[]).join('').replace(/\s+/g,'');
+        if(!PB.done&&(nm.indexOf('출고완료')>-1||hdr.indexOf('출고완료일')>-1)){
+          PB.done=pbBuildDone(rows);found.push('출고완료('+nm+'): '+PB.done.length+'건');
+        }else if(!PB.stock&&(nm.indexOf('재고')>-1||hdr.indexOf('재고수량')>-1)){
+          PB.stock=pbBuildStock(rows);
+          found.push('재고('+nm+'): '+PB.stock.length+'건'+(PB.stock.length===0?' ⚠️ 품목명 열 제목을 못 찾았습니다':''));
+        }else if(!PB.orders&&(nm.indexOf('raw')>-1||nm.indexOf('출고지시')>-1||nm.indexOf('주문서')>-1||(hdr.indexOf('출고일')>-1&&hdr.indexOf('거래처명')>-1))){
+          PB.orders=pbBuildOrders(rows);found.push('출고지시('+nm+'): '+PB.orders.length+'건');
+        }
       });
-      // 2차: 탭 이름으로 못 찾으면 열 제목(내용)으로 판별
-      if(found.length===0){
-        wb.SheetNames.forEach(function(nm){
-          var rows=pbRowsFrom(wb.Sheets[nm]);
-          var hr=pbHeaderRow(rows);var hdr=(rows[hr]||[]).join('').replace(/\s+/g,'');
-          if(!PB.done&&hdr.indexOf('출고완료일')>-1){PB.done=pbBuildDone(rows);found.push('출고완료('+nm+'): '+PB.done.length+'건');}
-          else if(!PB.stock&&hdr.indexOf('재고수량')>-1){PB.stock=pbBuildStock(rows);found.push('재고('+nm+'): '+PB.stock.length+'건');}
-          else if(!PB.orders&&hdr.indexOf('출고일')>-1&&hdr.indexOf('거래처명')>-1){PB.orders=pbBuildOrders(rows);found.push('출고지시('+nm+'): '+PB.orders.length+'건');}
-        });
-      }
       var el=document.getElementById('pb-summary');
       if(found.length===0){el.innerHTML='⚠️ 인식된 탭이 없습니다. 탭 이름에 raw/출고지시·가용재고·출고완료가 포함돼야 합니다.<br>파일의 탭: '+wb.SheetNames.join(', ');return;}
       el.innerHTML='✅ 인식 완료<br>'+found.join('<br>')+'<br><span style="color:var(--danger);font-size:12px;">반영하기를 누르면 플랜B 데이터가 이 내용으로 교체됩니다.</span>';
@@ -2352,9 +2350,24 @@ async function pbApply(){
   var out=document.getElementById('pb-result');out.innerHTML='';
   try{
     var msgs=[];
-    if(PB.orders){await pbReplace('shipment_orders_b',PB.orders);msgs.push('출고지시 '+PB.orders.length+'건');}
-    if(PB.stock){await pbReplace('stock_b',PB.stock);msgs.push('재고 '+PB.stock.length+'건');}
-    if(PB.done){await pbReplace('shipment_done_b',PB.done);msgs.push('출고완료 '+PB.done.length+'건');}
+    if(PB.orders&&PB.orders.length){
+      // ── 완료 상태 보존: 재업로드해도 기존 완료 처리 유지 ──
+      var kept=0;
+      try{
+        var ex=await SB.select('shipment_orders_b','&완료여부=eq.완료');
+        var keep={};
+        ex.forEach(function(r){var k=[r.납품처명||'',r.품번||'',r.품목명||''].join('|');(keep[k]=keep[k]||[]).push(r.완료일||null);});
+        PB.orders.forEach(function(o){
+          if(o.완료여부==='완료')return; // 파일에 이미 완료로 적힌 건 그대로
+          var k=[o.납품처명||'',o.품번||'',o.품목명||''].join('|');
+          if(keep[k]&&keep[k].length){o.완료여부='완료';o.완료일=keep[k].shift();kept++;}
+        });
+      }catch(e){console.warn('완료 상태 보존 실패:',e);}
+      await pbReplace('shipment_orders_b',PB.orders);
+      msgs.push('출고지시 '+PB.orders.length+'건'+(kept?' (기존 완료 '+kept+'건 유지)':''));
+    }
+    if(PB.stock&&PB.stock.length){await pbReplace('stock_b',PB.stock);msgs.push('재고 '+PB.stock.length+'건');}
+    if(PB.done&&PB.done.length){await pbReplace('shipment_done_b',PB.done);msgs.push('출고완료 '+PB.done.length+'건');}
     out.innerHTML='<span style="color:var(--success);font-weight:600;">✅ 반영 완료: '+msgs.join(' · ')+'</span> — 데이터를 다시 불러옵니다...';
     await loadData();
     out.innerHTML='<span style="color:var(--success);font-weight:600;">✅ 반영 및 새로고침 완료.</span> 각 탭에서 확인하세요.';
