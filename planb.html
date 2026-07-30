@@ -254,7 +254,7 @@ td.date{font-family:var(--mono);font-size:11px;}
   <button class="tab-btn active" onclick="showTab('overview',this)">전체 현황</button>
   <button class="tab-btn" onclick="showTab('shipment',this)">출고 지시</button>
   <button class="tab-btn" onclick="showTab('completed',this)">출고 완료</button>
-  <button class="tab-btn" onclick="showTab('stock_b',this)">재고 현황</button>
+  <button class="tab-btn" onclick="showTab('stock',this)">재고 현황</button>
   <button class="tab-btn" onclick="showTab('calendar',this)">출고 달력</button>
   <button class="tab-btn" onclick="showTab('map',this)">🗺 동선 지도</button>
   <button class="tab-btn" onclick="showTab('schedule',this)">🚚 납품 스케줄</button>
@@ -835,7 +835,7 @@ function showTab(name,btn){
   btn.classList.add('active');
   if(name==='shipment')renderShipment();
   if(name==='completed')renderDone();
-  if(name==='stock_b')renderStock();
+  if(name==='stock')renderStock();
   if(name==='calendar')renderCalendar();
   if(name==='map')initMap();
   if(name==='schedule')initSchedule();
