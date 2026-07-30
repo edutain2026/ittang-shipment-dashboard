@@ -2260,14 +2260,15 @@ function pbDate(v){
 function pbPerson(raw){if(!raw)return '미지정';var s=String(raw);if(s.indexOf('전종복')>-1)return '전종복 부장';if(s.indexOf('노영호')>-1)return '노영호 차장';return '미지정';}
 function pbSido(addr){if(!addr)return '';var s=String(addr);var rg=['서울','부산','대구','인천','광주','대전','울산','세종','경기','강원','충북','충남','전북','전남','경북','경남','제주'];for(var i=0;i<rg.length;i++)if(s.indexOf(rg[i])>-1)return rg[i];return '';}
 function pbHeaderRow(rows){for(var r=0;r<Math.min(8,rows.length);r++){var j=(rows[r]||[]).join('');if(j.indexOf('거래처명')>-1||j.indexOf('품목명')>-1)return r;}return 0;}
-function pbMap(hdr){var m={};(hdr||[]).forEach(function(h,i){var n=String(h||'').trim();if(n)m[n]=i;});return m;}
+function pbMap(hdr){var m={};(hdr||[]).forEach(function(h,i){var n=String(h||'').replace(/\s+/g,'');if(n&&m[n]===undefined)m[n]=i;});return m;}
+function pbCol(m,h){var n=String(h||'').replace(/\s+/g,'');if(m[n]!==undefined)return m[n];for(var k in m){if(k.indexOf(n)===0||n.indexOf(k)===0)return m[k];}return undefined;}
 
 function pbRowsFrom(ws){return XLSX.utils.sheet_to_json(ws,{header:1,defval:''});}
 
 function pbBuildOrders(rows){
   var hr=pbHeaderRow(rows),m=pbMap(rows[hr]),out=[];
   for(var r=hr+1;r<rows.length;r++){
-    var row=rows[r];var g=function(h){var c=m[h];return c===undefined?'':row[c];};
+    var row=rows[r];var g=function(h){var c=pbCol(m,h);return c===undefined?'':row[c];};
     var 거래처명=pbStr(g('거래처명')),품목명=pbStr(g('품목명'));
     if(!거래처명&&!품목명)continue;
     var addr=pbStr(g('납품처주소'))||'';var mth=pbStr(g('납품방법'))||'';
@@ -2282,7 +2283,7 @@ function pbBuildOrders(rows){
 function pbBuildStock(rows){
   var hr=pbHeaderRow(rows),m=pbMap(rows[hr]),out=[];
   for(var r=hr+1;r<rows.length;r++){
-    var row=rows[r];var g=function(h){var c=m[h];return c===undefined?'':row[c];};
+    var row=rows[r];var g=function(h){var c=pbCol(m,h);return c===undefined?'':row[c];};
     var 품목명=pbStr(g('품목명'));if(!품목명)continue;
     out.push({no:pbStr(g('No.'))||pbStr(g('No')),브랜드:pbStr(g('브랜드')),제품군:pbStr(g('제품군')),
       분류:pbStr(g('분류')),사용연령:pbStr(g('사용연령')),구분:pbStr(g('구분')),
@@ -2295,7 +2296,7 @@ function pbBuildStock(rows){
 function pbBuildDone(rows){
   var hr=pbHeaderRow(rows),m=pbMap(rows[hr]),out=[];
   for(var r=hr+1;r<rows.length;r++){
-    var row=rows[r];var g=function(h){var c=m[h];return c===undefined?'':row[c];};
+    var row=rows[r];var g=function(h){var c=pbCol(m,h);return c===undefined?'':row[c];};
     var 거래처명=pbStr(g('거래처명'));if(!거래처명)continue;
     out.push({출고완료일:pbDate(g('출고완료일')),거래처명:거래처명,품목명:pbStr(g('품목명')),
       품번:pbStr(g('품번')),수량:pbInt(g('수량')),납품처명:pbStr(g('납품처명')),
@@ -2315,10 +2316,20 @@ function pbHandleFile(e){
       var found=[];
       wb.SheetNames.forEach(function(nm){
         var rows;
-        if(!PB.orders&&(nm.indexOf('raw')>-1||nm.indexOf('출고지시')>-1)){rows=pbRowsFrom(wb.Sheets[nm]);PB.orders=pbBuildOrders(rows);found.push('출고지시('+nm+'): '+PB.orders.length+'건');}
+        if(!PB.orders&&(nm.indexOf('raw')>-1||nm.indexOf('출고지시')>-1||nm.indexOf('주문서')>-1)){rows=pbRowsFrom(wb.Sheets[nm]);PB.orders=pbBuildOrders(rows);found.push('출고지시('+nm+'): '+PB.orders.length+'건');}
         else if(!PB.stock&&nm.indexOf('가용재고')>-1){rows=pbRowsFrom(wb.Sheets[nm]);PB.stock=pbBuildStock(rows);found.push('재고('+nm+'): '+PB.stock.length+'건');}
         else if(!PB.done&&nm.indexOf('출고완료')>-1){rows=pbRowsFrom(wb.Sheets[nm]);PB.done=pbBuildDone(rows);found.push('출고완료('+nm+'): '+PB.done.length+'건');}
       });
+      // 2차: 탭 이름으로 못 찾으면 열 제목(내용)으로 판별
+      if(found.length===0){
+        wb.SheetNames.forEach(function(nm){
+          var rows=pbRowsFrom(wb.Sheets[nm]);
+          var hr=pbHeaderRow(rows);var hdr=(rows[hr]||[]).join('').replace(/\s+/g,'');
+          if(!PB.done&&hdr.indexOf('출고완료일')>-1){PB.done=pbBuildDone(rows);found.push('출고완료('+nm+'): '+PB.done.length+'건');}
+          else if(!PB.stock&&hdr.indexOf('재고수량')>-1){PB.stock=pbBuildStock(rows);found.push('재고('+nm+'): '+PB.stock.length+'건');}
+          else if(!PB.orders&&hdr.indexOf('출고일')>-1&&hdr.indexOf('거래처명')>-1){PB.orders=pbBuildOrders(rows);found.push('출고지시('+nm+'): '+PB.orders.length+'건');}
+        });
+      }
       var el=document.getElementById('pb-summary');
       if(found.length===0){el.innerHTML='⚠️ 인식된 탭이 없습니다. 탭 이름에 raw/출고지시·가용재고·출고완료가 포함돼야 합니다.<br>파일의 탭: '+wb.SheetNames.join(', ');return;}
       el.innerHTML='✅ 인식 완료<br>'+found.join('<br>')+'<br><span style="color:var(--danger);font-size:12px;">반영하기를 누르면 플랜B 데이터가 이 내용으로 교체됩니다.</span>';
