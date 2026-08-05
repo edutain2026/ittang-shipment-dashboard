@@ -238,7 +238,11 @@ td.date{font-family:var(--mono);font-size:11px;}
   .grid-2{grid-template-columns:1fr;}
   .map-layout{grid-template-columns:1fr;height:auto;}
   .map-container{height:380px;}
-  .sched-layout{grid-template-columns:1fr;}
+  .sched-layout{grid-template-columns:1fr;min-height:auto;}
+  /* 모바일: 날짜 목록을 가로 스크롤 띠로 */
+  .sched-date-list{display:flex;overflow-x:auto;overflow-y:hidden;max-height:none;-webkit-overflow-scrolling:touch;}
+  .sched-date-item{min-width:150px;flex-shrink:0;border-bottom:none;border-right:1px solid #F0EFE9;}
+  .sched-date-item.active{border-left:none;border-bottom:3px solid var(--accent);}
 }
 </style>
 </head>
@@ -1369,6 +1373,10 @@ function renderSchedDateList(){
       item.classList.add('active');
       currentSchedDate = date;
       renderSchedDetail(date);
+      // 모바일: 날짜 선택 시 상세로 자동 스크롤
+      if(window.innerWidth <= 960){
+        setTimeout(()=>{ document.getElementById('sched-detail').scrollIntoView({behavior:'smooth', block:'start'}); }, 100);
+      }
     };
     list.appendChild(item);
   });
