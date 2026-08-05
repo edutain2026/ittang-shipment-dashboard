@@ -264,7 +264,6 @@ td.date{font-family:var(--mono);font-size:11px;}
 
 <!-- ① 전체현황 -->
 <div class="tab-panel active" id="tab-overview">
-  <div class="notice">⚠️ <strong>데이터 이슈:</strong> 납품방법 컬럼에 담당자명 혼입 96건. 생산계획표 미연동으로 출고일=생산완료예정일로 가정 중 (방법 B 시뮬레이션).</div>
   <div class="kpi-row" id="kpi-row"></div>
   <div class="grid-2">
     <div class="card"><div class="card-title">영업담당자별 출고 건수</div><div id="chart-sales"></div></div>
@@ -442,7 +441,6 @@ td.date{font-family:var(--mono);font-size:11px;}
 
 <!-- ⑦ 납품 스케줄 최적화 -->
 <div class="tab-panel" id="tab-schedule">
-  <div class="notice">🚚 <strong>방법 B 시뮬레이션:</strong> 출고일 = 생산완료예정일로 가정. 출발지: 김포 공장. 시도별 클러스터링 + 최근접이웃 알고리즘 적용.</div>
 
   <!-- 담당자 필터 -->
   <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
@@ -622,6 +620,7 @@ td.date{font-family:var(--mono);font-size:11px;}
     </div>
     <div class="rc-actions">
       <button onclick="closeReceipt()" style="background:#E2E0DA;color:#444;">닫기</button>
+      <button id="rc-resign-btn" onclick="resignReceipt()" style="background:var(--danger-light);color:var(--danger);display:none;">↩️ 서명 취소 (다시 작성)</button>
       <button id="rc-clear-btn" onclick="clearSignature()" style="background:#FFF3E0;color:var(--warning);">서명 지우기</button>
       <button id="rc-save-btn" onclick="submitReceipt()" style="background:var(--success);color:#fff;">✅ 서명 완료 (PDF 저장)</button>
     </div>
@@ -699,6 +698,13 @@ async function sbReceiptInsert(row){
   });
   if(!res.ok){ console.error('[receipt insert]', await res.text()); return null; }
   return res.json().catch(()=>null);
+}
+async function sbReceiptDelete(id){
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/shipment_receipts?id=eq.${id}`, {
+    method:'DELETE', headers:SB.h
+  });
+  if(!res.ok) console.error('[receipt delete]', await res.text());
+  return res.ok;
 }
 
 // ── ③ 데이터 변수 (비워두고 loadData()에서 채움) ──
@@ -1472,17 +1478,15 @@ function renderSchedDetail(date){
           ${hasIssue?'<span style="font-size:10px;color:var(--danger)">⚠️재고부족</span>':''}
           ${allDone?'<span style="font-size:10px;color:var(--success);font-weight:400;">✅ 완료</span>':''}
           ${signed?'<span style="font-size:10px;background:var(--success-light);color:var(--success);padding:1px 7px;border-radius:3px;font-weight:500;">✍️ 서명완료</span>':''}
-          ${totalItems>0&&!allDone?`<span style="font-size:10px;color:var(--text-muted);font-weight:400;">${doneItems}/${totalItems}</span>`:''}
         </div>
         <div class="step-addr">${trunc(site.addr,45)}</div>
         <div class="step-tags">
           <span class="sido-pill" style="color:${color};border-color:${color};background:${color}18;padding:2px 8px;font-size:9px;">${site.시도}</span>
           ${driverTag}
         </div>
-        ${totalItems>0?`<div class="step-progress"><div class="step-progress-fill" style="width:${progress}%"></div></div>`:''}
         <div class="step-detail" id="${detailId}">
           <div class="step-detail-header">
-            <span>납품 품목 ${totalItems}건 · 완료 ${doneItems}건</span>
+            <span>납품 품목 ${totalItems}건${signed?' · ✍️ 서명완료':''}</span>
             <button class="receipt-btn ${signed?'receipt-btn-done':''}" data-site="${site.name}" data-date="${date}" onclick="openReceipt(this.dataset.site,this.dataset.date)">${signed?'📄 출고증 다시보기':'✍️ 출고증 서명'}</button>
           </div>
           ${detailRows || '<div style="padding:12px;color:var(--text-muted);font-size:12px;">품목 정보 없음</div>'}
@@ -2345,19 +2349,34 @@ function openReceipt(siteName, date){
   const banner = document.getElementById('rc-signed-banner');
   const saveBtn = document.getElementById('rc-save-btn');
   const clearBtn = document.getElementById('rc-clear-btn');
+  const resignBtn = document.getElementById('rc-resign-btn');
   if(rec){
     signArea.style.display='none';
     banner.style.display='block';
     banner.textContent = `✍️ 서명 완료 — 인수자: ${rec.서명자명||'-'} · ${(rec.서명시각||'').replace('T',' ').slice(0,16)} · PDF는 구글 드라이브 [출고증_PDF] 폴더에 저장되어 있습니다.`;
     saveBtn.style.display='none'; clearBtn.style.display='none';
+    resignBtn.style.display='inline-block';
   } else {
     signArea.style.display='flex';
     banner.style.display='none';
     saveBtn.style.display='inline-block'; clearBtn.style.display='inline-block';
+    resignBtn.style.display='none';
     document.getElementById('rc-name').value='';
     initSignaturePad();
   }
   document.getElementById('receipt-overlay').classList.add('open');
+}
+
+// 서명 취소 → 기록 삭제 후 다시 서명 화면으로
+async function resignReceipt(){
+  const rec = RECEIPTS.find(rc => rc.납품처명===rcSite && rc.출고일===rcDate);
+  if(!rec) return;
+  if(!confirm(`'${rcSite}' 출고증의 서명을 취소하고 다시 작성할까요?\n\n(구글 드라이브에 저장된 기존 PDF는 자동 삭제되지 않으니\n필요하면 드라이브에서 직접 삭제해 주세요)`)) return;
+  if(rec.id) await sbReceiptDelete(rec.id);
+  const idx = RECEIPTS.indexOf(rec);
+  if(idx>-1) RECEIPTS.splice(idx,1);
+  if(currentSchedDate) renderSchedDetail(currentSchedDate);
+  openReceipt(rcSite, rcDate); // 새 서명 화면으로 다시 열기
 }
 
 function closeReceipt(){ document.getElementById('receipt-overlay').classList.remove('open'); }
