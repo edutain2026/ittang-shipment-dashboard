@@ -2019,25 +2019,26 @@ function openFullNavigation(coords){
     return;
   }
 
-  const first=valid[0];
-  const last=valid[valid.length-1];
-  const middles=valid.slice(1,-1);
+  // 모든 납품처를 경유지로, 마지막 납품처를 도착지로
+  const dest=valid[valid.length-1];
+  const vias=valid.slice(0,-1);
 
-  // 네이버 지도 웹 길찾기 URL (출발→도착). 네이버 웹은 다중 경유지 링크 미지원 → 출발·도착만.
-  const naverWeb=`https://map.naver.com/p/directions/${first.lng},${first.lat},${enc(first.site.name)}/${last.lng},${last.lat},${enc(last.site.name)}/-/car`;
+  // 네이버 지도 웹: 출발 김포 공장 → 경유지들 → 도착지
+  const viaSeg=vias.map(c=>`${c.lng},${c.lat},${enc(c.site.name)}`).join(':')||'-';
+  const naverWeb=`https://map.naver.com/p/directions/${KIMPO.lng},${KIMPO.lat},${enc('김포 공장')}/${dest.lng},${dest.lat},${enc(dest.site.name)}/${viaSeg}/car`;
 
   if(isMobile){
-    // 네이버 지도 앱 딥링크 — 공식 경유지 형식(v1lat/v1lng/v1name, 최대 5곳)
-    const vias=middles.slice(0,5).map((c,idx)=>
+    // 네이버 지도 앱 딥링크 — 출발지 생략 시 현재 위치에서 출발 (경유지 최대 5곳)
+    const viaParams=vias.slice(0,5).map((c,idx)=>
       `&v${idx+1}lat=${c.lat}&v${idx+1}lng=${c.lng}&v${idx+1}name=${enc(c.site.name)}`
     ).join("");
-    const naverApp=`nmap://route/car?slat=${first.lat}&slng=${first.lng}&sname=${enc(first.site.name)}${vias}&dlat=${last.lat}&dlng=${last.lng}&dname=${enc(last.site.name)}&appname=ittang.delivery`;
+    const naverApp=`nmap://route/car?${viaParams.slice(1)}&dlat=${dest.lat}&dlng=${dest.lng}&dname=${enc(dest.site.name)}&appname=ittang.delivery`;
     location.href=naverApp;
-    // 앱 미설치 대비: 1.5초 뒤 네이버 지도 웹(출발→도착)으로 대체
-    setTimeout(()=>window.open(naverWeb,"_blank"),1500);
-    if(middles.length>5) console.warn("[네비] 경유지가 5곳을 초과해 처음 5곳만 앱에 전달됩니다.");
+    // 앱 미설치 대비: 앱이 안 열렸을 때만 웹으로 대체
+    setTimeout(()=>{ if(!document.hidden) window.open(naverWeb,"_blank"); },1500);
+    if(vias.length>5) alert("경유지가 5곳을 초과해 네이버지도 앱에는 처음 5곳만 전달됩니다.");
   } else {
-    // PC: 네이버 지도 웹으로 열기
+    // PC: 네이버 지도 웹 (경유지 포함)
     window.open(naverWeb,"_blank");
   }
 }
