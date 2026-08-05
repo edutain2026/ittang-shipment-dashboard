@@ -430,7 +430,7 @@ td.date{font-family:var(--mono);font-size:11px;}
     <div class="map-container">
       <div id="naver-map"></div>
       <div class="map-status hidden" id="map-status"></div>
-      <button id="full-navi-btn" onclick="openFullNavigation(currentMapCoords)" style="display:none;position:absolute;bottom:20px;left:10px;z-index:1000;background:#03C75A;color:#fff;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;align-items:center;gap:5px;box-shadow:0 2px 10px rgba(0,0,0,.28);font-family:'Noto Sans KR',sans-serif;">🧭 전체 경유 네비</button>
+      <button id="full-navi-btn" onclick="openFullNavigation(currentMapCoords)" style="display:none;position:absolute;top:10px;right:10px;z-index:1000;background:#03C75A;color:#fff;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;align-items:center;gap:5px;box-shadow:0 2px 10px rgba(0,0,0,.28);font-family:'Noto Sans KR',sans-serif;">🧭 전체 경유 네비</button>
       <div class="map-legend-box">
         <div class="leg-row"><div class="leg-dot" style="background:#7B3FA0"></div>전종복 부장</div>
         <div class="leg-row"><div class="leg-dot" style="background:#1A6B8C"></div>노영호 차장</div>
@@ -1910,12 +1910,11 @@ function drawMap(coords){
     // 정보창 (팝업)
     const items=c.site.items||[];
     const itemList=items.map(r=>`<div style="font-size:11px;color:#555;padding:1px 0;">• ${r.품목명||''} ${r.수량?r.수량+'개':''}</div>`).join('');
-    // 내비 URL 생성 (모바일: 앱, PC: 웹)
-    const naviUrl=`naver-map://route/car?dlat=${c.lat}&dlng=${c.lng}&dname=${encodeURIComponent(c.site.name)}`;
-    const naviWebUrl=`https://map.naver.com/v5/directions/-/-/${c.lng},${c.lat},${encodeURIComponent(c.site.name)}/-/car`;
-    const naviBtn=`<div style="margin-top:8px;display:flex;gap:6px;">
-      <a href="${naviUrl}" style="flex:1;text-align:center;background:#03C75A;color:#fff;text-decoration:none;border-radius:5px;padding:5px 0;font-size:11px;font-weight:700;" onclick="event.stopPropagation();">🧭 앱 내비</a>
-      <a href="${naviWebUrl}" target="_blank" style="flex:1;text-align:center;background:#2B5CE6;color:#fff;text-decoration:none;border-radius:5px;padding:5px 0;font-size:11px;font-weight:700;" onclick="event.stopPropagation();">🌐 웹 내비</a>
+    // 내비 버튼 (모바일: 네이버지도 앱 / PC: 네이버지도 웹에 목적지 검색)
+    const escName=(c.site.name||'').replace(/'/g,"\\'");
+    const escAddr=(c.site.addr||'').replace(/'/g,"\\'");
+    const naviBtn=`<div style="margin-top:8px;display:flex;">
+      <button onclick="event.stopPropagation();openSiteNav(${c.lat},${c.lng},'${escName}','${escAddr}')" style="flex:1;text-align:center;background:#03C75A;color:#fff;border:none;border-radius:5px;padding:7px 0;font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">🧭 네비 안내</button>
     </div>`;
     const iw=new naver.maps.InfoWindow({
       content:`<div style="padding:10px 14px;min-width:210px;font-family:'Noto Sans KR',sans-serif;">
@@ -1992,6 +1991,20 @@ async function drawOSRMRoute(validCoords){
   }
 }
 
+// 개별 납품처 네비 (모바일: 앱 / PC: 웹 검색)
+function openSiteNav(lat,lng,name,addr){
+  const enc=encodeURIComponent;
+  const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+  const webUrl=`https://map.naver.com/p/search/${enc(addr||name)}`;
+  if(isMobile){
+    location.href=`nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${enc(name)}&appname=ittang.delivery`;
+    // 앱이 안 열리면(미설치 등) 1.5초 뒤 웹으로 대체
+    setTimeout(()=>{ if(!document.hidden) window.open(webUrl,'_blank'); },1500);
+  } else {
+    window.open(webUrl,'_blank');
+  }
+}
+
 // 전체 경유지 네비게이션 앱 열기
 function openFullNavigation(coords){
   const valid=coords.filter(c=>c.lat);
@@ -2002,8 +2015,7 @@ function openFullNavigation(coords){
   // ── 단일 납품처 ──
   if(valid.length===1){
     const c=valid[0];
-    if(isMobile) location.href=`nmap://route/car?dlat=${c.lat}&dlng=${c.lng}&dname=${enc(c.site.name)}&appname=ittang.delivery`;
-    else window.open(`https://map.naver.com/v5/directions/-/-/${c.lng},${c.lat},${enc(c.site.name)}/-/car`,"_blank");
+    openSiteNav(c.lat, c.lng, c.site.name, c.site.addr);
     return;
   }
 
@@ -2012,7 +2024,7 @@ function openFullNavigation(coords){
   const middles=valid.slice(1,-1);
 
   // 네이버 지도 웹 길찾기 URL (출발→도착). 네이버 웹은 다중 경유지 링크 미지원 → 출발·도착만.
-  const naverWeb=`https://map.naver.com/v5/directions/${first.lng},${first.lat},${enc(first.site.name)}/-/${last.lng},${last.lat},${enc(last.site.name)}/-/car`;
+  const naverWeb=`https://map.naver.com/p/directions/${first.lng},${first.lat},${enc(first.site.name)}/${last.lng},${last.lat},${enc(last.site.name)}/-/car`;
 
   if(isMobile){
     // 네이버 지도 앱 딥링크 — 공식 경유지 형식(v1lat/v1lng/v1name, 최대 5곳)
@@ -2042,8 +2054,7 @@ function updateSiteList(sites){
   body.innerHTML=sites.map((s,i)=>{
     const color=DRIVER_COLORS[s.driver]||DRIVER_COLORS[''];
     const dLabel=s.driver?`<span class="site-driver-badge" style="background:${color}20;color:${color};">${s.driver}</span>`:'';
-    const sNaviUrl=`naver-map://route/car?dlat=__LAT__&dlng=__LNG__&dname=${encodeURIComponent(s.name)}`;
-    const sNaviWeb=`https://map.naver.com/v5/search/${encodeURIComponent(s.addr||s.name)}`;
+    const sNaviWeb=`https://map.naver.com/p/search/${encodeURIComponent(s.addr||s.name)}`;
     return `<div class="site-item" id="site-item-${i}" onclick="focusMarker(${i})">
       <div class="site-name"><span class="site-num" style="background:${color}">${i+1}</span>${trunc(s.name,15)} ${dLabel}</div>
       <div class="site-addr">${trunc(s.addr,30)}</div>
