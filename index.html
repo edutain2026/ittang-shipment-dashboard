@@ -2495,9 +2495,12 @@ async function submitReceipt(){
       pdf.save(filename); // 웹앱 URL 미설정 시 기기에 다운로드
     }
 
-    // ② Supabase 서명 기록
+    // ② Supabase 서명 기록 (실패 시 명확히 알림)
     const row = {납품처명:rcSite, 출고일:rcDate, 서명자명:name, 품목수:rcItems.length, pdf파일명:filename};
     const inserted = await sbReceiptInsert(row);
+    if(!inserted || !inserted[0]){
+      alert('⚠️ 서명 기록을 서버에 저장하지 못했습니다.\n\nSupabase에 shipment_receipts 테이블이 있는지 확인해 주세요.\n(다른 기기에는 서명완료가 표시되지 않습니다)');
+    }
     RECEIPTS.push((inserted&&inserted[0])||{...row, 서명시각:new Date().toISOString()});
 
     // ③ 화면 갱신
