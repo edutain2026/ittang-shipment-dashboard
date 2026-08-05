@@ -572,6 +572,8 @@ td.date{font-family:var(--mono);font-size:11px;}
 .rc-sign-name input{border:none;border-bottom:1px solid #888;font-size:14px;padding:4px 6px;width:130px;text-align:center;font-family:'Noto Sans KR',sans-serif;background:transparent;}
 #sig-canvas{background:transparent;}
 #sigpad-canvas{touch-action:none;cursor:crosshair;}
+/* 모바일 세로 화면: 서명 패드를 가로로 회전 */
+#sigpad-inner.rot{inset:auto;top:0;left:100%;width:100vh;height:100vw;transform:rotate(90deg);transform-origin:top left;border-radius:0;}
 .rc-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;padding-bottom:30px;}
 .rc-actions button{border:none;border-radius:5px;padding:10px 18px;font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
 .rc-signed-banner{background:var(--success-light);color:var(--success);border:1px solid var(--success);border-radius:4px;padding:10px 14px;font-size:12.5px;font-weight:500;margin-top:14px;text-align:center;}
@@ -633,7 +635,7 @@ td.date{font-family:var(--mono);font-size:11px;}
 
 <!-- ── 전체화면 서명 패드 (모바일 대응) ── -->
 <div id="sigpad-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:950;">
-  <div style="position:absolute;inset:10px;background:#fff;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;">
+  <div id="sigpad-inner" style="position:absolute;inset:10px;background:#fff;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;">
     <div style="padding:12px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">✍️ 아래 넓은 칸에 손가락으로 서명해 주세요</div>
     <div style="flex:1;position:relative;">
       <canvas id="sigpad-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;"></canvas>
@@ -2407,14 +2409,21 @@ function clearSignature(){
 }
 
 // ── 전체화면 서명 패드 ──
-let padCtx = null, padDrawn = false;
+let padCtx = null, padDrawn = false, padRotated = false;
 function openSigPad(){
   const ov = document.getElementById('sigpad-overlay');
+  const inner = document.getElementById('sigpad-inner');
+  // 모바일 세로 화면이면 패드를 가로로 회전
+  padRotated = (window.innerWidth <= 960 && window.innerHeight > window.innerWidth);
+  inner.classList.toggle('rot', padRotated);
   ov.style.display='block';
   const canvas = document.getElementById('sigpad-canvas');
   const rect = canvas.getBoundingClientRect();
   const ratio = window.devicePixelRatio || 1;
-  canvas.width = rect.width*ratio; canvas.height = rect.height*ratio;
+  // 회전 시 화면 좌표계와 캔버스 좌표계가 뒤바뀜
+  const cw = padRotated ? rect.height : rect.width;
+  const ch = padRotated ? rect.width : rect.height;
+  canvas.width = cw*ratio; canvas.height = ch*ratio;
   padCtx = canvas.getContext('2d');
   padCtx.scale(ratio, ratio);
   padCtx.lineWidth = 3.5; padCtx.lineCap='round'; padCtx.lineJoin='round'; padCtx.strokeStyle='#111';
@@ -2422,7 +2431,9 @@ function openSigPad(){
   let drawing = false;
   const pos = ev => {
     const r = canvas.getBoundingClientRect();
-    return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+    return padRotated
+      ? { x: ev.clientY - r.top, y: r.right - ev.clientX }
+      : { x: ev.clientX - r.left, y: ev.clientY - r.top };
   };
   canvas.onpointerdown = ev => { ev.preventDefault(); drawing=true; const p=pos(ev); padCtx.beginPath(); padCtx.moveTo(p.x,p.y); canvas.setPointerCapture(ev.pointerId); };
   canvas.onpointermove = ev => { if(!drawing) return; ev.preventDefault(); const p=pos(ev); padCtx.lineTo(p.x,p.y); padCtx.stroke(); padDrawn=true; };
@@ -2506,6 +2517,22 @@ if (document.readyState === "loading") {
 } else {
   loadData();
 }
+
+// ── 서명 기록 자동 갱신 (1분마다) ──
+// 다른 기기에서 서명해도 열려있는 화면에 서명완료가 자동 반영됨
+setInterval(async ()=>{
+  try{
+    const fresh = await SB.select('shipment_receipts');
+    if(JSON.stringify(fresh) !== JSON.stringify(RECEIPTS)){
+      RECEIPTS = fresh;
+      const schedTab = document.getElementById('tab-schedule');
+      if(schedTab && schedTab.classList.contains('active')){
+        renderSchedDateList();
+        if(currentSchedDate) renderSchedDetail(currentSchedDate);
+      }
+    }
+  }catch(e){ /* 네트워크 일시 오류는 무시 */ }
+}, 60000);
 
 </script>
 </body>
