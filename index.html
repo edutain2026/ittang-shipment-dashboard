@@ -4,14 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>아이땅 출고관리 대시보드</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1A1916">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-180.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="아이땅 출고">
 <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=snx4jy15pq&submodules=geocoder"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 :root{
@@ -269,6 +264,7 @@ td.date{font-family:var(--mono);font-size:11px;}
 
 <!-- ① 전체현황 -->
 <div class="tab-panel active" id="tab-overview">
+  <div class="notice">⚠️ <strong>데이터 이슈:</strong> 납품방법 컬럼에 담당자명 혼입 96건. 생산계획표 미연동으로 출고일=생산완료예정일로 가정 중 (방법 B 시뮬레이션).</div>
   <div class="kpi-row" id="kpi-row"></div>
   <div class="grid-2">
     <div class="card"><div class="card-title">영업담당자별 출고 건수</div><div id="chart-sales"></div></div>
@@ -546,9 +542,106 @@ td.date{font-family:var(--mono);font-size:11px;}
   <div style="color:#fff;font-size:14px;font-weight:500;">데이터 불러오는 중…</div>
   <div style="color:rgba(255,255,255,.5);font-size:11px;">Supabase 연결 중</div>
 </div>
-<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+<style>
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── 출고증(인수확인서) ── */
+.receipt-btn{border:1px solid var(--accent);background:var(--accent-light);color:var(--accent);border-radius:4px;padding:4px 12px;font-size:11px;font-weight:500;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.receipt-btn-done{border-color:var(--success);background:var(--success-light);color:var(--success);}
+#receipt-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;overflow-y:auto;padding:20px 10px;}
+#receipt-overlay.open{display:block;}
+.receipt-wrap{max-width:760px;margin:0 auto;}
+#receipt-doc{background:#fff;padding:34px 38px;border-radius:4px;color:#111;font-size:13px;line-height:1.6;}
+.rc-head{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:4px;}
+.rc-brand{display:flex;align-items:center;gap:10px;}
+.rc-brand img{height:34px;}
+.rc-brand-name{font-size:17px;font-weight:700;letter-spacing:-.3px;}
+.rc-title{font-size:22px;font-weight:700;letter-spacing:5px;display:flex;align-items:baseline;white-space:nowrap;}
+.rc-info{width:100%;border-collapse:collapse;margin-top:14px;}
+.rc-info td{border:1px solid #bbb;padding:6px 10px;font-size:12px;}
+.rc-info td.k{background:#F3F2EE;font-weight:500;width:90px;white-space:nowrap;}
+.rc-items{width:100%;border-collapse:collapse;margin-top:14px;}
+.rc-items th{border:1px solid #bbb;background:#F3F2EE;padding:6px 8px;font-size:12px;font-weight:500;}
+.rc-items td{border:1px solid #bbb;padding:6px 8px;font-size:12px;}
+.rc-terms{margin-top:16px;background:#FAF9F6;border:1px solid #E2E0DA;border-radius:4px;padding:12px 14px;font-size:11.5px;color:#333;}
+.rc-terms p{margin:2px 0;}
+.rc-confirm{margin-top:14px;text-align:center;font-size:13px;font-weight:500;}
+.rc-sign-row{display:flex;align-items:flex-end;justify-content:flex-end;gap:14px;margin-top:16px;flex-wrap:wrap;}
+.rc-sign-name input{border:none;border-bottom:1px solid #888;font-size:14px;padding:4px 6px;width:130px;text-align:center;font-family:'Noto Sans KR',sans-serif;background:transparent;}
+#sig-canvas{background:transparent;}
+#sigpad-canvas{touch-action:none;cursor:crosshair;}
+.rc-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;padding-bottom:30px;}
+.rc-actions button{border:none;border-radius:5px;padding:10px 18px;font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.rc-signed-banner{background:var(--success-light);color:var(--success);border:1px solid var(--success);border-radius:4px;padding:10px 14px;font-size:12.5px;font-weight:500;margin-top:14px;text-align:center;}
+@media(max-width:640px){#receipt-doc{padding:20px 14px;}.rc-title{letter-spacing:4px;font-size:18px;}}
+</style>
 
 </div><!-- /.main -->
+
+<!-- ── 출고증(인수확인서) 모달 ── -->
+<div id="receipt-overlay">
+  <div class="receipt-wrap">
+    <div id="receipt-doc">
+      <div class="rc-head" style="position:relative;height:48px;display:block;">
+        <img src="logo_black.png" alt="아이땅" style="height:22px;position:absolute;left:0;top:50%;transform:translateY(-50%);" onerror="this.style.display='none'">
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:22px;font-weight:700;letter-spacing:5px;white-space:nowrap;">출고증<span style="position:absolute;left:100%;bottom:3px;font-size:12px;font-weight:400;letter-spacing:0;color:#555;white-space:nowrap;">(인수확인서)</span></div>
+      </div>
+      <table class="rc-info">
+        <tr><td class="k">납품처</td><td id="rc-site"></td><td class="k">출고일</td><td id="rc-date"></td></tr>
+        <tr><td class="k">납품처 주소</td><td colspan="3" id="rc-addr"></td></tr>
+      </table>
+      <table class="rc-items">
+        <thead><tr><th style="width:36px;">번호</th><th style="width:110px;">품번</th><th>품목명</th><th style="width:56px;">수량</th></tr></thead>
+        <tbody id="rc-item-rows"></tbody>
+      </table>
+      <div class="rc-terms">
+        <p>① 인수자는 상기 품목의 수량 및 상태에 이상이 없음을 확인하고 인수합니다.</p>
+        <p>② 상품 설치 완료 후에는 단순 변심 등 고객 사유에 의한 반품·교환이 불가합니다.</p>
+        <p>③ 본 확인서 서명 이후 제기되는 수량 부족·외관 불량 등의 사유는 인정되지 않습니다.</p>
+      </div>
+      <div class="rc-confirm">상기 품목을 이상 없이 인수하였음을 확인합니다.</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin-top:18px;flex-wrap:wrap;">
+        <div style="position:relative;font-size:12px;color:#333;padding:16px 34px 8px 0;white-space:nowrap;">
+          공급자 : <span style="font-weight:700;">주식회사 아이땅</span> <span style="color:#999;">(인)</span>
+          <img src="seal.png" alt="" onerror="this.style.display='none'"
+               style="position:absolute;right:-14px;top:-14px;width:60px;opacity:.92;transform:rotate(-6deg);pointer-events:none;">
+        </div>
+        <div class="rc-sign-row" id="rc-sign-area" style="margin-top:0;">
+          <div style="font-size:12px;color:#444;" id="rc-today"></div>
+          <div class="rc-sign-name">인수자 <input type="text" id="rc-name" placeholder="성명 입력"></div>
+          <div>
+            <div style="font-size:10px;color:#888;margin-bottom:2px;">서명 (칸을 누르면 크게 서명할 수 있습니다)</div>
+            <div id="sig-box" onclick="openSigPad()" style="position:relative;width:260px;height:110px;border:1px dashed #999;border-radius:4px;background:#fff;cursor:pointer;">
+              <canvas id="sig-canvas" width="260" height="110" style="width:100%;height:100%;display:block;"></canvas>
+              <div id="sig-hint" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:#bbb;">여기를 눌러 서명</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="rc-signed-banner" id="rc-signed-banner" style="display:none;"></div>
+    </div>
+    <div class="rc-actions">
+      <button onclick="closeReceipt()" style="background:#E2E0DA;color:#444;">닫기</button>
+      <button id="rc-clear-btn" onclick="clearSignature()" style="background:#FFF3E0;color:var(--warning);">서명 지우기</button>
+      <button id="rc-save-btn" onclick="submitReceipt()" style="background:var(--success);color:#fff;">✅ 서명 완료 (PDF 저장)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 전체화면 서명 패드 (모바일 대응) ── -->
+<div id="sigpad-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:950;">
+  <div style="position:absolute;inset:10px;background:#fff;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="padding:12px 16px;font-size:13px;color:#555;border-bottom:1px solid #eee;">✍️ 아래 넓은 칸에 손가락으로 서명해 주세요</div>
+    <div style="flex:1;position:relative;">
+      <canvas id="sigpad-canvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;"></canvas>
+    </div>
+    <div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid #eee;justify-content:flex-end;">
+      <button onclick="closeSigPad()" style="border:none;border-radius:6px;padding:12px 20px;font-size:14px;cursor:pointer;background:#E2E0DA;color:#444;font-family:'Noto Sans KR',sans-serif;">취소</button>
+      <button onclick="clearSigPad()" style="border:none;border-radius:6px;padding:12px 20px;font-size:14px;cursor:pointer;background:#FFF3E0;color:var(--warning);font-family:'Noto Sans KR',sans-serif;">지우기</button>
+      <button onclick="confirmSigPad()" style="border:none;border-radius:6px;padding:12px 24px;font-size:14px;cursor:pointer;background:var(--success);color:#fff;font-weight:500;font-family:'Noto Sans KR',sans-serif;">✅ 서명 확인</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ══════════════════════════════════════════════════════
@@ -596,8 +689,20 @@ SB.upsert=async function(){console.log("[조회전용] DB 쓰기 차단됨");ret
 SB.insert=async function(){console.log("[조회전용] DB 쓰기 차단됨");return [];};
 SB.deleteRow=async function(){console.log("[조회전용] DB 쓰기 차단됨");};
 
+// ── 출고증(인수확인서) 설정 ──
+// Apps Script 웹앱 배포 URL (배포 → 웹 앱 → URL을 여기에 붙여넣기)
+const GAS_PDF_URL = 'https://script.google.com/macros/s/AKfycbyD_3GbXH4zs0drMoN31WhRUk4uvE3_y83V57m050_a7AuulTeegJXeWlQmJyqlw53F6Q/exec';
+// 출고증 서명 기록은 조회 전용 차단과 별개로 허용 (전용 함수)
+async function sbReceiptInsert(row){
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/shipment_receipts`, {
+    method:'POST', headers:{...SB.h, 'Prefer':'return=representation'}, body:JSON.stringify(row)
+  });
+  if(!res.ok){ console.error('[receipt insert]', await res.text()); return null; }
+  return res.json().catch(()=>null);
+}
+
 // ── ③ 데이터 변수 (비워두고 loadData()에서 채움) ──
-let RAW = [], DONE = [], STOCK = [];
+let RAW = [], DONE = [], STOCK = [], RECEIPTS = [];
 let SCHEDULE = {}, ROUTE = {}, DATES = [];
 let SUGGESTIONS = [];
 
@@ -760,14 +865,16 @@ async function loadData() {
   try {
     loading.style.display='flex';
     // 병렬 로드
-    const [rawData, doneData, stockData] = await Promise.all([
+    const [rawData, doneData, stockData, receiptData] = await Promise.all([
       SB.select('shipment_orders'),
       SB.select('shipment_done'),
-      SB.select('stock')
+      SB.select('stock'),
+      SB.select('shipment_receipts').catch(()=>[]) // 테이블 없어도 앱은 동작
     ]);
     RAW   = rawData;
     DONE  = doneData;
     STOCK = stockData;
+    RECEIPTS = receiptData;
     // 파생 데이터 계산
     computeScheduleRoutesDates();
     computeSuggestions();
@@ -1334,6 +1441,7 @@ function renderSchedDetail(date){
 
     // RAW에서 실제 품목 행 가져오기 (납품처명+출고일 매칭)
     const rawItems = RAW.filter(r => r.납품처명===site.name && r.출고일===date);
+    const signed = RECEIPTS.some(rc => rc.납품처명===site.name && rc.출고일===date);
     const totalItems = rawItems.length;
     const doneItems = rawItems.filter(r=>r._done).length;
     const allDone = totalItems > 0 && doneItems === totalItems;
@@ -1363,6 +1471,7 @@ function renderSchedDetail(date){
           <span class="step-site-text">${site.name}</span>
           ${hasIssue?'<span style="font-size:10px;color:var(--danger)">⚠️재고부족</span>':''}
           ${allDone?'<span style="font-size:10px;color:var(--success);font-weight:400;">✅ 완료</span>':''}
+          ${signed?'<span style="font-size:10px;background:var(--success-light);color:var(--success);padding:1px 7px;border-radius:3px;font-weight:500;">✍️ 서명완료</span>':''}
           ${totalItems>0&&!allDone?`<span style="font-size:10px;color:var(--text-muted);font-weight:400;">${doneItems}/${totalItems}</span>`:''}
         </div>
         <div class="step-addr">${trunc(site.addr,45)}</div>
@@ -1374,7 +1483,7 @@ function renderSchedDetail(date){
         <div class="step-detail" id="${detailId}">
           <div class="step-detail-header">
             <span>납품 품목 ${totalItems}건 · 완료 ${doneItems}건</span>
-            
+            <button class="receipt-btn ${signed?'receipt-btn-done':''}" data-site="${site.name}" data-date="${date}" onclick="openReceipt(this.dataset.site,this.dataset.date)">${signed?'📄 출고증 다시보기':'✍️ 출고증 서명'}</button>
           </div>
           ${detailRows || '<div style="padding:12px;color:var(--text-muted);font-size:12px;">품목 정보 없음</div>'}
         </div>
@@ -2208,6 +2317,161 @@ document.addEventListener("click", function(e){
   const dd = document.getElementById("date-multi-dropdown");
   if(wrap && dd && !wrap.contains(e.target)) dd.classList.remove("open");
 });
+
+// ══════════════════════════════════
+// ── 출고증(인수확인서) 전자서명 ──
+// ══════════════════════════════════
+let rcSite = null, rcDate = null, rcItems = [];
+let sigDrawn = false, sigCtx = null;
+
+function openReceipt(siteName, date){
+  rcSite = siteName; rcDate = date;
+  rcItems = RAW.filter(r => r.납품처명===siteName && r.출고일===date);
+  if(rcItems.length===0){ alert('이 납품처의 품목 정보가 없습니다.'); return; }
+
+  // 문서 채우기
+  document.getElementById('rc-site').textContent = siteName;
+  document.getElementById('rc-date').textContent = date;
+  document.getElementById('rc-addr').textContent = rcItems[0].납품처주소 || '-';
+  document.getElementById('rc-item-rows').innerHTML = rcItems.map((r,i)=>
+    `<tr><td style="text-align:center;">${i+1}</td><td>${r.품번||'-'}</td><td>${r.품목명||''}</td><td style="text-align:center;">${r.수량||''}</td></tr>`).join('');
+  const now = new Date();
+  document.getElementById('rc-today').textContent =
+    `${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일`;
+
+  // 이미 서명된 건인지 확인
+  const rec = RECEIPTS.find(rc => rc.납품처명===siteName && rc.출고일===date);
+  const signArea = document.getElementById('rc-sign-area');
+  const banner = document.getElementById('rc-signed-banner');
+  const saveBtn = document.getElementById('rc-save-btn');
+  const clearBtn = document.getElementById('rc-clear-btn');
+  if(rec){
+    signArea.style.display='none';
+    banner.style.display='block';
+    banner.textContent = `✍️ 서명 완료 — 인수자: ${rec.서명자명||'-'} · ${(rec.서명시각||'').replace('T',' ').slice(0,16)} · PDF는 구글 드라이브 [출고증_PDF] 폴더에 저장되어 있습니다.`;
+    saveBtn.style.display='none'; clearBtn.style.display='none';
+  } else {
+    signArea.style.display='flex';
+    banner.style.display='none';
+    saveBtn.style.display='inline-block'; clearBtn.style.display='inline-block';
+    document.getElementById('rc-name').value='';
+    initSignaturePad();
+  }
+  document.getElementById('receipt-overlay').classList.add('open');
+}
+
+function closeReceipt(){ document.getElementById('receipt-overlay').classList.remove('open'); }
+
+// ── 서명 (문서 안 작은 칸 = 미리보기, 클릭하면 전체화면 패드) ──
+function initSignaturePad(){
+  const canvas = document.getElementById('sig-canvas');
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = 260*ratio; canvas.height = 110*ratio;
+  sigCtx = canvas.getContext('2d');
+  sigDrawn = false;
+  document.getElementById('sig-hint').style.display='flex';
+}
+
+function clearSignature(){
+  const canvas = document.getElementById('sig-canvas');
+  sigCtx && sigCtx.clearRect(0,0,canvas.width,canvas.height);
+  sigDrawn = false;
+  document.getElementById('sig-hint').style.display='flex';
+}
+
+// ── 전체화면 서명 패드 ──
+let padCtx = null, padDrawn = false;
+function openSigPad(){
+  const ov = document.getElementById('sigpad-overlay');
+  ov.style.display='block';
+  const canvas = document.getElementById('sigpad-canvas');
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = rect.width*ratio; canvas.height = rect.height*ratio;
+  padCtx = canvas.getContext('2d');
+  padCtx.scale(ratio, ratio);
+  padCtx.lineWidth = 3.5; padCtx.lineCap='round'; padCtx.lineJoin='round'; padCtx.strokeStyle='#111';
+  padDrawn = false;
+  let drawing = false;
+  const pos = ev => {
+    const r = canvas.getBoundingClientRect();
+    return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+  };
+  canvas.onpointerdown = ev => { ev.preventDefault(); drawing=true; const p=pos(ev); padCtx.beginPath(); padCtx.moveTo(p.x,p.y); canvas.setPointerCapture(ev.pointerId); };
+  canvas.onpointermove = ev => { if(!drawing) return; ev.preventDefault(); const p=pos(ev); padCtx.lineTo(p.x,p.y); padCtx.stroke(); padDrawn=true; };
+  canvas.onpointerup = canvas.onpointercancel = () => { drawing=false; };
+}
+function closeSigPad(){ document.getElementById('sigpad-overlay').style.display='none'; }
+function clearSigPad(){
+  const canvas = document.getElementById('sigpad-canvas');
+  padCtx && padCtx.clearRect(0,0,canvas.width,canvas.height);
+  padDrawn = false;
+}
+function confirmSigPad(){
+  if(!padDrawn){ alert('서명해 주세요.'); return; }
+  const pad = document.getElementById('sigpad-canvas');
+  const small = document.getElementById('sig-canvas');
+  const ctx = small.getContext('2d');
+  ctx.clearRect(0,0,small.width,small.height);
+  // 큰 패드 내용을 작은 칸에 비율 유지하며 축소
+  const scale = Math.min(small.width/pad.width, small.height/pad.height);
+  const w = pad.width*scale, h = pad.height*scale;
+  ctx.drawImage(pad, (small.width-w)/2, (small.height-h)/2, w, h);
+  sigDrawn = true;
+  document.getElementById('sig-hint').style.display='none';
+  closeSigPad();
+}
+
+// ── 서명 완료 → PDF 생성 → 드라이브 저장 ──
+async function submitReceipt(){
+  const name = document.getElementById('rc-name').value.trim();
+  if(!name){ alert('인수자 성명을 입력해 주세요.'); return; }
+  if(!sigDrawn){ alert('서명란에 서명해 주세요.'); return; }
+
+  const saveBtn = document.getElementById('rc-save-btn');
+  saveBtn.disabled = true; saveBtn.textContent = '저장 중…';
+
+  try{
+    // 문서 영역을 이미지로 캡처 → A4 PDF
+    const doc = document.getElementById('receipt-doc');
+    const canvas = await html2canvas(doc, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+    const img = canvas.toDataURL('image/jpeg', 0.92);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({unit:'mm', format:'a4'});
+    const pw = 210, margin = 10;
+    const iw = pw - margin*2;
+    const ih = iw * canvas.height / canvas.width;
+    pdf.addImage(img, 'JPEG', margin, margin, iw, Math.min(ih, 277));
+
+    const filename = `${rcSite}_${rcDate}.pdf`;
+
+    // ① 구글 드라이브 저장 (Apps Script 웹앱)
+    if(GAS_PDF_URL){
+      const pdfBase64 = pdf.output('datauristring').split(',')[1];
+      await fetch(GAS_PDF_URL, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({filename, pdfBase64, 납품처:rcSite, 출고일:rcDate, 서명자:name})
+      });
+    } else {
+      pdf.save(filename); // 웹앱 URL 미설정 시 기기에 다운로드
+    }
+
+    // ② Supabase 서명 기록
+    const row = {납품처명:rcSite, 출고일:rcDate, 서명자명:name, 품목수:rcItems.length, pdf파일명:filename};
+    const inserted = await sbReceiptInsert(row);
+    RECEIPTS.push((inserted&&inserted[0])||{...row, 서명시각:new Date().toISOString()});
+
+    // ③ 화면 갱신
+    closeReceipt();
+    if(currentSchedDate) renderSchedDetail(currentSchedDate);
+    alert(`✅ 출고증 서명 완료\n\n${rcSite} (${rcDate})\n인수자: ${name}\n${GAS_PDF_URL?'PDF가 구글 드라이브 [출고증_PDF] 폴더에 저장되었습니다.':'PDF가 기기에 다운로드되었습니다.\n(드라이브 자동 저장은 웹앱 URL 설정 후 사용 가능)'}`);
+  }catch(err){
+    alert('저장 중 오류가 발생했습니다:\n'+err.message);
+  }finally{
+    saveBtn.disabled = false; saveBtn.textContent = '✅ 서명 완료 (PDF 저장)';
+  }
+}
 
 // ── 앱 시작: 데이터 로드 ──
 if (document.readyState === "loading") {
