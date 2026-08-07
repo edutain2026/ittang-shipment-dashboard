@@ -349,11 +349,7 @@ td.date{font-family:var(--mono);font-size:11px;}
 <div class="tab-panel" id="tab-calendar">
   <div class="filter-bar" style="flex-wrap:wrap;">
     <label>월 선택</label>
-    <select id="cal-month" onchange="renderCalendar()">
-      <option value="2026-06">2026년 6월</option>
-      <option value="2026-07">2026년 7월</option>
-      <option value="2026-08">2026년 8월</option>
-    </select>
+    <select id="cal-month" onchange="renderCalendar()"></select>
     <div style="width:1px;height:20px;background:var(--border);"></div>
     <label>출고담당</label>
     <div style="display:flex;gap:6px;">
@@ -1063,8 +1059,39 @@ function setCalDriver(d){
   renderCalendar();
 }
 
+// ── 공휴일 (표시용) ── 필요 시 여기에 추가/수정
+const HOLIDAYS={
+  '2026-01-01':'신정',
+  '2026-02-16':'설날 연휴','2026-02-17':'설날','2026-02-18':'설날 연휴',
+  '2026-03-01':'삼일절','2026-03-02':'대체공휴일',
+  '2026-05-05':'어린이날','2026-05-24':'부처님오신날','2026-05-25':'대체공휴일',
+  '2026-06-06':'현충일',
+  '2026-08-03':'여름휴가','2026-08-04':'여름휴가','2026-08-05':'여름휴가','2026-08-06':'여름휴가','2026-08-07':'여름휴가',
+  '2026-08-15':'광복절','2026-08-17':'대체공휴일',
+  '2026-09-24':'추석 연휴','2026-09-25':'추석','2026-09-26':'추석 연휴',
+  '2026-10-03':'개천절','2026-10-05':'대체공휴일','2026-10-09':'한글날',
+  '2026-12-25':'성탄절'
+};
+
+// ── 월 선택 목록: 데이터에 있는 월 + 이번 달, 기본값 = 이번 달 ──
+function buildCalMonthOptions(){
+  const sel=document.getElementById('cal-month');
+  if(!sel) return;
+  const nowMonth=new Date().toISOString().slice(0,7);
+  const months=new Set([nowMonth]);
+  RAW.forEach(r=>{ if(r.출고일&&/^\d{4}-\d{2}/.test(r.출고일)) months.add(r.출고일.slice(0,7)); });
+  const list=[...months].sort();
+  sel.innerHTML=list.map(mm=>{
+    const [yy,m2]=mm.split('-');
+    return `<option value="${mm}">${yy}년 ${parseInt(m2)}월</option>`;
+  }).join('');
+  sel.value=list.includes(nowMonth)?nowMonth:list[list.length-1];
+}
+
 function renderCalendar(){
-  const month=document.getElementById('cal-month').value;
+  const sel=document.getElementById('cal-month');
+  if(!sel.options.length) buildCalMonthOptions();
+  const month=sel.value;
   const [y,m]=month.split('-').map(Number);
   const today=new Date().toISOString().split('T')[0];
   let items=RAW.filter(r=>r.출고일&&r.출고일.startsWith(month));
@@ -1120,10 +1147,17 @@ function renderCalendar(){
     cell.className=`cal-day ${dayItems.length?'has-items':''} ${dateStr===today?'today':''}`;
     cell.dataset.date=dateStr;
 
-    // 날짜 헤더
+    // 날짜 헤더 (공휴일 = 빨간 표시 + 이름)
+    const holName=HOLIDAYS[dateStr];
     const dateDiv=document.createElement('div');
-    dateDiv.className=`cal-date ${dow===0?'sun':dow===6?'sat':''}`;
+    dateDiv.className=`cal-date ${holName||dow===0?'sun':dow===6?'sat':''}`;
     dateDiv.textContent=d;
+    if(holName){
+      const hl=document.createElement('span');
+      hl.textContent=holName;
+      hl.style.cssText='font-size:9px;color:var(--danger);margin-left:4px;font-weight:500;';
+      dateDiv.appendChild(hl);
+    }
     cell.appendChild(dateDiv);
 
     // 납품처 칩 (최대 3개)
