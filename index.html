@@ -273,6 +273,19 @@ td.date{font-family:var(--mono);font-size:11px;}
     <div class="card"><div class="card-title">영업담당자별 출고 건수</div><div id="chart-sales"></div></div>
     <div class="card"><div class="card-title">납품방법 분포</div><div id="chart-method"></div></div>
   </div>
+  <div class="grid-2">
+    <div class="card"><div class="card-title">월별 출고 계획</div><div id="chart-monthly"></div></div>
+    <div class="card">
+      <div class="card-title">기간별 출고 조회</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0;">
+        <input type="date" id="range-from" onchange="renderRangeStats()" style="border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:var(--mono);">
+        <span style="color:var(--text-muted);font-size:12px;">~</span>
+        <input type="date" id="range-to" onchange="renderRangeStats()" style="border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:var(--mono);">
+        <button onclick="setRangeThisMonth()" style="border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:11px;background:transparent;color:var(--text-secondary);cursor:pointer;font-family:'Noto Sans KR',sans-serif;">이번 달</button>
+      </div>
+      <div id="range-stats" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;"></div>
+    </div>
+  </div>
   <div class="section-title">이번 주 출고 예정</div>
   <div class="table-wrap">
     <table>
@@ -316,8 +329,15 @@ td.date{font-family:var(--mono);font-size:11px;}
 
 <!-- ③ 출고완료 -->
 <div class="tab-panel" id="tab-completed">
-  <div class="filter-bar">
+  <div class="filter-bar" style="flex-wrap:wrap;">
     <label>검색</label><input type="text" id="done-search" placeholder="납품처명 / 품목명" oninput="renderDone()">
+    <div style="width:1px;height:20px;background:var(--border);"></div>
+    <label>완료일</label>
+    <input type="date" id="done-from" onchange="renderDone()" style="border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:var(--mono);">
+    <span style="color:var(--text-muted);font-size:12px;">~</span>
+    <input type="date" id="done-to" onchange="renderDone()" style="border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;font-family:var(--mono);">
+    <button onclick="document.getElementById('done-from').value='';document.getElementById('done-to').value='';renderDone();"
+      style="border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:11px;background:transparent;color:var(--text-secondary);cursor:pointer;font-family:'Noto Sans KR',sans-serif;">초기화</button>
     <div class="filter-count" id="done-count"></div>
   </div>
   <div class="table-wrap">
@@ -945,9 +965,46 @@ function renderBarChart(id,data,max){
 }
 function renderCharts(){
   const sm={};RAW.forEach(r=>{if(r.영업담당자)sm[r.영업담당자]=(sm[r.영업담당자]||0)+1;});
-  const sa=Object.entries(sm).sort((a,b)=>b[1]-a[1]);renderBarChart('chart-sales',sa,sa[0][1]);
+  const sa=Object.entries(sm).sort((a,b)=>b[1]-a[1]);renderBarChart('chart-sales',sa,sa.length?sa[0][1]:1);
   const mm={};RAW.forEach(r=>{const m=r.납품방법||'미지정';mm[m]=(mm[m]||0)+1;});
-  const ma=Object.entries(mm).sort((a,b)=>b[1]-a[1]);renderBarChart('chart-method',ma,ma[0][1]);
+  const ma=Object.entries(mm).sort((a,b)=>b[1]-a[1]);renderBarChart('chart-method',ma,ma.length?ma[0][1]:1);
+  // 월별 출고 계획 (출고일 기준 월별 건수)
+  const mo={};RAW.forEach(r=>{if(r.출고일&&/^\d{4}-\d{2}/.test(r.출고일)){const k=r.출고일.slice(0,7);mo[k]=(mo[k]||0)+1;}});
+  const moa=Object.entries(mo).sort((a,b)=>a[0].localeCompare(b[0]))
+    .map(([k,v])=>[`${k.split('-')[0]}년 ${parseInt(k.split('-')[1])}월`,v]);
+  const moMax=moa.length?Math.max(...moa.map(e=>e[1])):1;
+  renderBarChart('chart-monthly',moa,moMax);
+  // 기간 조회 기본값: 이번 달
+  if(!document.getElementById('range-from').value) setRangeThisMonth();
+  else renderRangeStats();
+}
+
+// ── 기간별 출고 조회 ──
+function setRangeThisMonth(){
+  const now=new Date();
+  const y=now.getFullYear(), m=now.getMonth();
+  const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  document.getElementById('range-from').value=fmt(new Date(y,m,1));
+  document.getElementById('range-to').value=fmt(new Date(y,m+1,0));
+  renderRangeStats();
+}
+function renderRangeStats(){
+  const from=document.getElementById('range-from').value;
+  const to=document.getElementById('range-to').value;
+  const box=document.getElementById('range-stats');
+  if(!from||!to){box.innerHTML='<div style="grid-column:1/3;color:var(--text-muted);font-size:12px;">기간을 선택하세요</div>';return;}
+  const items=RAW.filter(r=>r.출고일&&r.출고일>=from&&r.출고일<=to);
+  const qty=items.reduce((a,r)=>a+(parseInt(r.수량)||0),0);
+  const sites=new Set(items.map(r=>r.납품처명).filter(Boolean)).size;
+  const days=new Set(items.map(r=>r.출고일)).size;
+  const stat=(n,l,c)=>`<div style="background:#F8F7F4;border-radius:6px;padding:12px 14px;">
+    <div style="font-family:var(--mono);font-size:22px;font-weight:500;color:${c};">${n}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${l}</div></div>`;
+  box.innerHTML=
+    stat(items.length,'출고 품목 (건)','var(--accent)')+
+    stat(sites,'납품처 수 (곳)','var(--success)')+
+    stat(qty.toLocaleString(),'총 수량 (개)','var(--text-primary)')+
+    stat(days,'출고일 수 (일)','var(--warning)');
 }
 function renderThisWeek(){
   const today=new Date();const mon=new Date(today);mon.setDate(today.getDate()-today.getDay()+1);
@@ -1006,7 +1063,18 @@ function renderShipmentPage(){
 }
 
 // ── 출고완료 ──
-function getDoneFiltered(){const s=document.getElementById('done-search').value.toLowerCase();return DONE.filter(r=>!s||r.납품처명.toLowerCase().includes(s)||r.품목명.toLowerCase().includes(s));}
+function getDoneFiltered(){
+  const s=document.getElementById('done-search').value.toLowerCase();
+  const from=document.getElementById('done-from').value;
+  const to=document.getElementById('done-to').value;
+  return DONE.filter(r=>{
+    if(s && !(r.납품처명.toLowerCase().includes(s)||r.품목명.toLowerCase().includes(s))) return false;
+    const d=(r.출고완료일||'').slice(0,10);
+    if(from && (!d || d<from)) return false;
+    if(to && (!d || d>to)) return false;
+    return true;
+  });
+}
 function renderDone(){donePage=1;renderDonePage();}
 function renderDonePage(){
   const filtered=getDoneFiltered();const total=filtered.length;
