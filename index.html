@@ -250,7 +250,11 @@ td.date{font-family:var(--mono);font-size:11px;}
 
 <div class="header">
   <div class="header-logo">아이땅 <span>출고관리</span> 대시보드</div>
-  <div class="header-meta">📖 조회 전용 · v0.4 · 2026.07</div>
+  <div class="header-meta" style="display:flex;align-items:center;gap:10px;">
+    <span>📖 조회 전용 · v0.5 · 2026.08</span>
+    <span id="user-email" style="color:rgba(255,255,255,.7);"></span>
+    <button onclick="authLogout()" style="background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">로그아웃</button>
+  </div>
 </div>
 
 <div class="tab-nav">
@@ -649,6 +653,23 @@ td.date{font-family:var(--mono);font-size:11px;}
   </div>
 </div>
 
+<!-- ── 로그인 화면 ── -->
+<div id="login-overlay" style="display:none;position:fixed;inset:0;background:#1A1916;z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:36px 32px;width:340px;max-width:90vw;">
+    <div style="font-size:18px;font-weight:700;margin-bottom:4px;">아이땅 <span style="color:#2B5CE6;">출고관리</span></div>
+    <div style="font-size:12px;color:#9E9C96;margin-bottom:22px;">허용된 사용자만 접속할 수 있습니다</div>
+    <input type="email" id="login-email" placeholder="이메일" autocomplete="username"
+      style="width:100%;border:1px solid #E2E0DA;border-radius:6px;padding:11px 12px;font-size:14px;margin-bottom:10px;font-family:'Noto Sans KR',sans-serif;box-sizing:border-box;">
+    <input type="password" id="login-pw" placeholder="비밀번호" autocomplete="current-password"
+      style="width:100%;border:1px solid #E2E0DA;border-radius:6px;padding:11px 12px;font-size:14px;margin-bottom:6px;font-family:'Noto Sans KR',sans-serif;box-sizing:border-box;"
+      onkeydown="if(event.key==='Enter')doLogin()">
+    <div id="login-err" style="font-size:12px;color:#C43030;min-height:18px;margin-bottom:6px;"></div>
+    <button onclick="doLogin()" id="login-btn"
+      style="width:100%;background:#2B5CE6;color:#fff;border:none;border-radius:6px;padding:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">로그인</button>
+    <div style="font-size:11px;color:#9E9C96;margin-top:14px;">계정이 필요하면 관리자에게 문의하세요.</div>
+  </div>
+</div>
+
 <!-- ── 전체화면 서명 패드 (모바일 대응) ── -->
 <div id="sigpad-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:950;">
   <div id="sigpad-inner" style="position:absolute;inset:10px;background:#fff;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;">
@@ -672,11 +693,76 @@ const SUPABASE_URL = 'https://nfpuvuhcvdfuobqotybj.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_Q5xUJjK1pv1nNPsFmq-0DA_8a_KkJPP';
 // (Supabase 대시보드 → Settings → API 에서 확인)
 
+// ── 로그인 세션 ──
+let AUTH_TOKEN = localStorage.getItem('ittang_at') || '';
+
+async function authLogin(email, pw){
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method:'POST', headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
+    body: JSON.stringify({email:email, password:pw})
+  });
+  const j = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(j.error_description||j.msg||'이메일 또는 비밀번호가 올바르지 않습니다');
+  setSession(j);
+}
+function setSession(j){
+  AUTH_TOKEN = j.access_token;
+  localStorage.setItem('ittang_at', j.access_token);
+  localStorage.setItem('ittang_rt', j.refresh_token||'');
+  localStorage.setItem('ittang_exp', String(Date.now()+(j.expires_in||3600)*1000));
+  if(j.user&&j.user.email) localStorage.setItem('ittang_email', j.user.email);
+}
+async function authRefresh(){
+  const rt = localStorage.getItem('ittang_rt');
+  if(!rt) return false;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method:'POST', headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
+      body: JSON.stringify({refresh_token: rt})
+    });
+    if(!res.ok) return false;
+    setSession(await res.json());
+    return true;
+  }catch(e){ return false; }
+}
+async function ensureAuth(){
+  const exp = parseInt(localStorage.getItem('ittang_exp')||'0');
+  if(AUTH_TOKEN && Date.now() < exp-60000) return true;
+  return await authRefresh();
+}
+function authLogout(){
+  ['ittang_at','ittang_rt','ittang_exp','ittang_email'].forEach(k=>localStorage.removeItem(k));
+  AUTH_TOKEN='';
+  location.reload();
+}
+function showLogin(){ const o=document.getElementById('login-overlay'); o.style.display='flex'; }
+function hideLogin(){ document.getElementById('login-overlay').style.display='none'; }
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pw=document.getElementById('login-pw').value;
+  const err=document.getElementById('login-err');
+  const btn=document.getElementById('login-btn');
+  if(!email||!pw){ err.textContent='이메일과 비밀번호를 입력하세요'; return; }
+  btn.disabled=true; btn.textContent='확인 중…'; err.textContent='';
+  try{
+    await authLogin(email, pw);
+    hideLogin();
+    const ue=document.getElementById('user-email');
+    if(ue) ue.textContent = localStorage.getItem('ittang_email')||'';
+    loadData();
+  }catch(e){ err.textContent=e.message; }
+  finally{ btn.disabled=false; btn.textContent='로그인'; }
+}
+
 // ── ② Supabase REST API 헬퍼 ──
 const SB = {
-  h: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+  get h(){ return { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + (AUTH_TOKEN||SUPABASE_KEY), 'Content-Type': 'application/json' }; },
   async select(table, qs='') {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*${qs}&order=id`, { headers: {...this.h, 'Range':'0-9999'} });
+    let res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*${qs}&order=id`, { headers: {...this.h, 'Range':'0-9999'} });
+    if (res.status===401 && await authRefresh()) {
+      res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*${qs}&order=id`, { headers: {...this.h, 'Range':'0-9999'} });
+    }
+    if (res.status===401) { showLogin(); throw new Error('로그인이 필요합니다'); }
     if (!res.ok) throw new Error(`[${table}] ` + await res.text());
     return res.json();
   },
@@ -2616,12 +2702,23 @@ async function submitReceipt(){
   }
 }
 
-// ── 앱 시작: 데이터 로드 ──
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", loadData);
-} else {
-  loadData();
+// ── 앱 시작: 로그인 확인 후 데이터 로드 ──
+async function appStart(){
+  if(await ensureAuth()){
+    hideLogin();
+    const ue=document.getElementById('user-email');
+    if(ue) ue.textContent = localStorage.getItem('ittang_email')||'';
+    loadData();
+  }
+  else showLogin();
 }
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", appStart);
+} else {
+  appStart();
+}
+// 세션 자동 연장 (10분마다)
+setInterval(ensureAuth, 10*60*1000);
 
 // ── 서명 기록 자동 갱신 (1분마다) ──
 // 다른 기기에서 서명해도 열려있는 화면에 서명완료가 자동 반영됨
