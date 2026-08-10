@@ -735,7 +735,11 @@ function authLogout(){
   AUTH_TOKEN='';
   location.reload();
 }
-function showLogin(){ const o=document.getElementById('login-overlay'); o.style.display='flex'; }
+function showLogin(){
+  const l=document.getElementById('loading-overlay');
+  if(l) l.style.display='none';   // 로딩 표시 끄기
+  document.getElementById('login-overlay').style.display='flex';
+}
 function hideLogin(){ document.getElementById('login-overlay').style.display='none'; }
 async function doLogin(){
   const email=document.getElementById('login-email').value.trim();
