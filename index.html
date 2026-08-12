@@ -1004,6 +1004,15 @@ async function loadData() {
     DONE  = doneData;
     STOCK = stockData;
     RECEIPTS = receiptData;
+    // A/S 건 표시: 품번에 AS가 포함된 건은 납품처명 앞에 "A/S_" 붙임 (모든 화면에 반영)
+    RAW.forEach(r=>{
+      const pn=String(r.품번||'').toUpperCase();
+      const isAS = r.AS여부==='Y' || pn.indexOf('A/S')>-1 || pn.indexOf('AS')>-1;
+      if(isAS){
+        r.AS여부='Y';
+        if(r.납품처명 && r.납품처명.indexOf('A/S_')!==0) r.납품처명='A/S_'+r.납품처명;
+      }
+    });
     // 파생 데이터 계산
     computeScheduleRoutesDates();
     computeSuggestions();
@@ -1121,13 +1130,20 @@ function renderThisWeek(){
   tbody.innerHTML=items.map(r=>`<tr>
     <td class="date">${r.출고일}</td>
     <td>
-      <div style="font-size:12px;font-weight:500;">${trunc(r.납품처명,16)}</div>
+      <div style="font-size:12px;font-weight:500;">${siteNameHtml(r,16)}</div>
       <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${extractSigu(r.납품처주소)}</div>
     </td>
     <td title="${r.품목명}">${trunc(r.품목명,18)}</td>
     <td class="mono">${r.품번}</td><td class="mono">${r.수량}</td>
     <td>${methodBadge(r)}</td><td>${r.영업담당자||'-'}</td>
     <td>${stockBadge(r.재고상태)}</td></tr>`).join('');
+}
+
+// ── A/S 건 납품처명 표시: 빨간 (A/S) + 이름 ──
+function siteNameHtml(r,len){
+  const nm=String(r.납품처명||'').replace(/^A\/S_/,'');
+  if(r.AS여부==='Y') return '<span style="color:var(--danger);font-weight:700;">(A/S)</span> '+trunc(nm,len);
+  return trunc(nm,len);
 }
 
 // ── 출고지시 ──
@@ -1154,7 +1170,7 @@ function renderShipmentPage(){
   document.getElementById('shipment-count').textContent=`${total}건`;
   document.getElementById('shipment-tbody').innerHTML=items.map(r=>`<tr>
     <td class="date">${r.출고일||'-'}</td>
-    <td title="${r.납품처명}">${trunc(r.납품처명,16)}</td>
+    <td title="${r.납품처명}">${siteNameHtml(r,16)}</td>
     <td>
       <div style="font-size:11px;color:var(--text-secondary);">${extractSigu(r.납품처주소)}</div>
       <div style="font-size:10px;color:var(--text-muted);margin-top:2px;" title="${r.납품처주소}">${trunc(r.납품처주소,30)}</div>
