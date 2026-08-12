@@ -324,7 +324,7 @@ td.date{font-family:var(--mono);font-size:11px;}
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>출고일</th><th>납품처</th><th>주소</th><th>품목명</th><th>품번</th><th>수량</th><th>재고상태</th><th>납품방법</th><th>영업담당</th><th>상태</th></tr></thead>
+      <thead><tr><th>출고일</th><th>납품처</th><th>주소</th><th>품목명</th><th>품번</th><th>수량</th><th>출고금액</th><th>재고상태</th><th>납품방법</th><th>영업담당</th><th>상태</th></tr></thead>
       <tbody id="shipment-tbody"></tbody>
     </table>
     <div class="pagination" id="shipment-pagination"></div>
@@ -1109,16 +1109,18 @@ function renderRangeStats(){
   if(!from||!to){box.innerHTML='<div style="grid-column:1/3;color:var(--text-muted);font-size:12px;">기간을 선택하세요</div>';return;}
   const items=RAW.filter(r=>r.출고일&&r.출고일>=from&&r.출고일<=to);
   const qty=items.reduce((a,r)=>a+(parseInt(r.수량)||0),0);
+  const amount=items.reduce((a,r)=>a+(parseInt(r.출고금액)||0),0);
   const sites=new Set(items.map(r=>r.납품처명).filter(Boolean)).size;
   const days=new Set(items.map(r=>r.출고일)).size;
-  const stat=(n,l,c)=>`<div style="background:#F8F7F4;border-radius:6px;padding:12px 14px;">
+  const stat=(n,l,c,span)=>`<div style="background:#F8F7F4;border-radius:6px;padding:12px 14px;${span?'grid-column:1/3;':''}">
     <div style="font-family:var(--mono);font-size:22px;font-weight:500;color:${c};">${n}</div>
     <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${l}</div></div>`;
   box.innerHTML=
     stat(items.length,'출고 품목 (건)','var(--accent)')+
     stat(sites,'납품처 수 (곳)','var(--success)')+
     stat(qty.toLocaleString(),'총 수량 (개)','var(--text-primary)')+
-    stat(days,'출고일 수 (일)','var(--warning)');
+    stat(days,'출고일 수 (일)','var(--warning)')+
+    (amount>0?stat('₩'+amount.toLocaleString(),'총 출고금액','var(--accent)',true):'');
 }
 function renderThisWeek(){
   const today=new Date();const mon=new Date(today);mon.setDate(today.getDate()-today.getDay()+1);
@@ -1177,6 +1179,7 @@ function renderShipmentPage(){
     </td>
     <td title="${r.품목명}">${trunc(r.품목명,18)}</td>
     <td class="mono">${r.품번}</td><td class="mono" style="text-align:right">${r.수량}</td>
+    <td class="mono" style="text-align:right">${r.출고금액?Number(r.출고금액).toLocaleString():'-'}</td>
     <td>${stockBadge(r.재고상태)}</td>
     <td>${methodBadge(r)}</td><td>${r.영업담당자||'-'}</td>
     <td>${statusBadge(r)}</td></tr>`).join('');
