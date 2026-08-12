@@ -29,9 +29,12 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .header-meta{font-size:11px;color:rgba(255,255,255,.5);font-family:var(--mono);}
 
 .tab-nav{background:var(--surface);border-bottom:1px solid var(--border);display:flex;padding:0 24px;overflow-x:auto;}
-.tab-btn{padding:12px 18px;border:none;background:none;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;white-space:nowrap;}
-.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-btn{padding:12px 18px;border:none;background:none;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;white-space:nowrap;}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:700;}
 .tab-btn:hover:not(.active){color:var(--text-primary);}
+/* 메인 탭 (납품 스케줄 · 동선 지도): 옅은 배경 + 진한 글자 강조 */
+.tab-btn.tab-main{background:var(--accent-light);color:var(--text-primary);font-weight:700;border-radius:8px 8px 0 0;margin-top:6px;}
+.tab-btn.tab-main.active{color:var(--accent);border-bottom-color:var(--accent);}
 
 .main{padding:20px 24px;max-width:1440px;margin:0 auto;}
 .tab-panel{display:none;}.tab-panel.active{display:block;}
@@ -258,13 +261,13 @@ td.date{font-family:var(--mono);font-size:11px;}
 </div>
 
 <div class="tab-nav">
-  <button class="tab-btn active" onclick="showTab('overview',this)">전체 현황</button>
+  <button class="tab-btn tab-main" id="tabbtn-schedule" onclick="showTab('schedule',this)">🚚 납품 스케줄</button>
+  <button class="tab-btn tab-main" onclick="showTab('map',this)">🗺 동선 지도</button>
+  <button class="tab-btn" id="tabbtn-calendar" onclick="showTab('calendar',this)">출고 달력</button>
   <button class="tab-btn" onclick="showTab('shipment',this)">출고 지시</button>
-  <button class="tab-btn" onclick="showTab('completed',this)">출고 완료</button>
+  <button class="tab-btn active" onclick="showTab('overview',this)">전체 현황</button>
   <button class="tab-btn" onclick="showTab('stock',this)">재고 현황</button>
-  <button class="tab-btn" onclick="showTab('calendar',this)">출고 달력</button>
-  <button class="tab-btn" onclick="showTab('map',this)">🗺 동선 지도</button>
-  <button class="tab-btn" onclick="showTab('schedule',this)">🚚 납품 스케줄</button>
+  <button class="tab-btn" onclick="showTab('completed',this)">출고 완료</button>
   <button class="tab-btn" onclick="showTab('autodate',this)">💡 출고일 추천</button>
 </div>
 
@@ -289,7 +292,7 @@ td.date{font-family:var(--mono);font-size:11px;}
   <div class="section-title">이번 주 출고 예정</div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>출고일</th><th>납품처 / 시구</th><th>품목명</th><th>품번</th><th>수량</th><th>납품방법</th><th>영업담당</th><th>재고</th><th>상태</th></tr></thead>
+      <thead><tr><th>출고일</th><th>납품처 / 시구</th><th>품목명</th><th>품번</th><th>수량</th><th>납품방법</th><th>영업담당</th><th>비고</th></tr></thead>
       <tbody id="this-week-tbody"></tbody>
     </table>
   </div>
@@ -315,16 +318,23 @@ td.date{font-family:var(--mono);font-size:11px;}
     <select id="filter-status" onchange="renderShipment()">
       <option value="">전체</option><option value="일반">일반</option><option value="AS">A/S</option>
     </select>
-    <label>재고</label>
-    <select id="filter-stock" onchange="renderShipment()">
-      <option value="">전체</option><option value="재고있음">재고있음</option><option value="재고없음">재고없음</option><option value="재고정보없음">정보없음</option>
-    </select>
     <label>검색</label><input type="text" id="filter-search" placeholder="납품처명 / 품목명 / 품번" oninput="renderShipment()">
     <div class="filter-count" id="shipment-count"></div>
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>출고일</th><th>납품처</th><th>주소</th><th>품목명</th><th>품번</th><th>수량</th><th>출고금액</th><th>재고상태</th><th>납품방법</th><th>영업담당</th><th>상태</th></tr></thead>
+      <thead><tr>
+        <th onclick="setShipSort('출고일')" style="cursor:pointer;" id="th-출고일">출고일 <span class="sort-arrow"></span></th>
+        <th onclick="setShipSort('납품처명')" style="cursor:pointer;" id="th-납품처명">납품처 <span class="sort-arrow"></span></th>
+        <th>주소</th>
+        <th onclick="setShipSort('품목명')" style="cursor:pointer;" id="th-품목명">품목명 <span class="sort-arrow"></span></th>
+        <th>품번</th>
+        <th onclick="setShipSort('수량')" style="cursor:pointer;" id="th-수량">수량 <span class="sort-arrow"></span></th>
+        <th onclick="setShipSort('출고금액')" style="cursor:pointer;" id="th-출고금액">출고금액 <span class="sort-arrow"></span></th>
+        <th>납품방법</th>
+        <th onclick="setShipSort('영업담당자')" style="cursor:pointer;" id="th-영업담당자">영업담당 <span class="sort-arrow"></span></th>
+        <th>비고</th>
+      </tr></thead>
       <tbody id="shipment-tbody"></tbody>
     </table>
     <div class="pagination" id="shipment-pagination"></div>
@@ -528,7 +538,6 @@ td.date{font-family:var(--mono);font-size:11px;}
           <th>납품처</th>
           <th>지역</th>
           <th>품목수</th>
-          <th>재고</th>
           <th>출고담당</th>
           <th>추천 출고일</th>
           <th>배정 근거</th>
@@ -1013,20 +1022,6 @@ async function loadData() {
         if(r.납품처명 && r.납품처명.indexOf('A/S_')!==0) r.납품처명='A/S_'+r.납품처명;
       }
     });
-    // 재고상태 계산: 가용재고현황의 품번(구/신)과 대조
-    const stockMap={};
-    STOCK.forEach(s=>{
-      [s.품번구, s.품번신].forEach(pn=>{
-        const k=String(pn||'').trim().toUpperCase();
-        if(k) stockMap[k]=(parseInt(s.재고수량)||0);
-      });
-    });
-    RAW.forEach(r=>{
-      if(r.AS여부==='Y'){ r.재고상태='해당없음'; return; }   // A/S 방문 건은 재고 무관
-      const k=String(r.품번||'').trim().toUpperCase();
-      if(!k || stockMap[k]===undefined){ r.재고상태='재고정보없음'; return; }
-      r.재고상태 = stockMap[k] >= (parseInt(r.수량)||0) ? '재고있음' : '재고없음';
-    });
     // 파생 데이터 계산
     computeScheduleRoutesDates();
     computeSuggestions();
@@ -1078,12 +1073,12 @@ function renderKPI(){
   const sun=new Date(mon); sun.setDate(mon.getDate()+6);
   const fmt=d=>d.toISOString().split('T')[0];
   const thisWeek=RAW.filter(r=>r.출고일>=fmt(mon)&&r.출고일<=fmt(sun)).length;
-  const stockIssue=RAW.filter(r=>r.재고상태==='재고없음').length;
+  const asCnt=RAW.filter(r=>r.AS여부==='Y').length;
   document.getElementById('kpi-row').innerHTML=`
     <div class="kpi-card"><div class="kpi-label">전체 출고 지시</div><div class="kpi-value accent">${total}</div><div class="kpi-sub">건 (진행 중)</div></div>
     <div class="kpi-card"><div class="kpi-label">이번 주 출고 예정</div><div class="kpi-value warning">${thisWeek}</div><div class="kpi-sub">건</div></div>
     <div class="kpi-card"><div class="kpi-label">출고 완료 누적</div><div class="kpi-value success">${DONE.length}</div><div class="kpi-sub">건 (출고완료현황)</div></div>
-    <div class="kpi-card"><div class="kpi-label">재고 부족</div><div class="kpi-value danger">${stockIssue}</div><div class="kpi-sub">건 출고 불가</div></div>`;
+    <div class="kpi-card"><div class="kpi-label">A/S 일정</div><div class="kpi-value danger">${asCnt}</div><div class="kpi-sub">건</div></div>`;
 }
 function renderBarChart(id,data,max){
   document.getElementById(id).innerHTML=data.map(([l,v])=>`
@@ -1142,7 +1137,7 @@ function renderThisWeek(){
   const fmt=d=>d.toISOString().split('T')[0];
   const items=RAW.filter(r=>r.출고일>=fmt(mon)&&r.출고일<=fmt(sun));
   const tbody=document.getElementById('this-week-tbody');
-  if(!items.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px">이번 주 출고 예정 없음</td></tr>';return;}
+  if(!items.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px">이번 주 출고 예정 없음</td></tr>';return;}
   tbody.innerHTML=items.map(r=>`<tr>
     <td class="date">${r.출고일}</td>
     <td>
@@ -1152,7 +1147,7 @@ function renderThisWeek(){
     <td title="${r.품목명}">${trunc(r.품목명,18)}</td>
     <td class="mono">${r.품번}</td><td class="mono">${r.수량}</td>
     <td>${methodBadge(r)}</td><td>${r.영업담당자||'-'}</td>
-    <td>${stockBadge(r.재고상태)}</td></tr>`).join('');
+    <td>${statusBadge(r)}</td></tr>`).join('');
 }
 
 // ── A/S 건 납품처명 표시: 빨간 (A/S) + 이름 ──
@@ -1162,26 +1157,45 @@ function siteNameHtml(r,len){
   return trunc(nm,len);
 }
 
+// ── 출고지시 정렬 ──
+let shipSortKey='', shipSortDir=1;
+function setShipSort(key){
+  if(shipSortKey===key) shipSortDir*=-1;   // 같은 제목 다시 클릭 → 방향 반전
+  else { shipSortKey=key; shipSortDir=1; }
+  document.querySelectorAll('.sort-arrow').forEach(el=>el.textContent='');
+  const arrow=document.querySelector(`#th-${key} .sort-arrow`);
+  if(arrow) arrow.textContent = shipSortDir===1 ? '▲' : '▼';
+  renderShipment();
+}
+function applyShipSort(list){
+  if(!shipSortKey) return list;
+  const numeric = (shipSortKey==='수량'||shipSortKey==='출고금액');
+  return [...list].sort((a,b)=>{
+    if(numeric){
+      return ((parseInt(a[shipSortKey])||0)-(parseInt(b[shipSortKey])||0))*shipSortDir;
+    }
+    return String(a[shipSortKey]||'').localeCompare(String(b[shipSortKey]||''),'ko')*shipSortDir;
+  });
+}
+
 // ── 출고지시 ──
 function getFiltered(){
   const selectedDates=getSelectedDates();
   const person=document.getElementById('filter-person').value;
   const status=document.getElementById('filter-status').value;
-  const stockF=document.getElementById('filter-stock').value;
   const search=document.getElementById('filter-search').value.toLowerCase();
   return RAW.filter(r=>{
     if(selectedDates.length>0&&!selectedDates.includes(r.출고일))return false;
     if(person&&r.출고담당자!==person)return false;
     if(status==='AS'&&r.AS여부!=='Y')return false;
     if(status==='일반'&&r.AS여부==='Y')return false;
-    if(stockF&&r.재고상태!==stockF)return false;
     if(search&&!(r.납품처명.toLowerCase().includes(search)||r.품목명.toLowerCase().includes(search)||r.품번.toLowerCase().includes(search)))return false;
     return true;
   });
 }
 function renderShipment(){shipPage=1;renderShipmentPage();}
 function renderShipmentPage(){
-  const filtered=getFiltered();const total=filtered.length;
+  const filtered=applyShipSort(getFiltered());const total=filtered.length;
   const items=filtered.slice((shipPage-1)*PAGE_SIZE,shipPage*PAGE_SIZE);
   document.getElementById('shipment-count').textContent=`${total}건`;
   document.getElementById('shipment-tbody').innerHTML=items.map(r=>`<tr>
@@ -1194,7 +1208,6 @@ function renderShipmentPage(){
     <td title="${r.품목명}">${trunc(r.품목명,18)}</td>
     <td class="mono">${r.품번}</td><td class="mono" style="text-align:right">${r.수량}</td>
     <td class="mono" style="text-align:right">${r.출고금액?Number(r.출고금액).toLocaleString():'-'}</td>
-    <td>${stockBadge(r.재고상태)}</td>
     <td>${methodBadge(r)}</td><td>${r.영업담당자||'-'}</td>
     <td>${statusBadge(r)}</td></tr>`).join('');
   renderPagination('shipment-pagination',Math.ceil(total/PAGE_SIZE),shipPage,p=>{shipPage=p;renderShipmentPage();});
@@ -1737,7 +1750,7 @@ function renderSchedDetail(date){
         <span class="item-name">${r.품목명}</span>
         <span class="item-pn">${r.품번}</span>
         <span class="item-qty">×${r.수량}</span>
-        <span class="item-stock">${stockBadge(r.재고상태)}</span>
+        ${r.AS여부==='Y'?'<span class="badge badge-as">A/S</span>':''}
       </div>`;
     }).join('');
 
@@ -1777,8 +1790,7 @@ function renderSchedDetail(date){
   document.getElementById('sched-detail').innerHTML=`
     <div class="sched-summary-row">
       <div class="sched-stat"><div class="sched-stat-num" style="color:var(--accent)">${route.length}</div><div class="sched-stat-label">납품처${schedDriver!=='all'?' (필터)':''}</div></div>
-      <div class="sched-stat"><div class="sched-stat-num" style="color:var(--success)">${route.filter(r=>!r.stock_issues||r.stock_issues.length===0).length}</div><div class="sched-stat-label">정상 출고</div></div>
-      <div class="sched-stat"><div class="sched-stat-num" style="color:var(--danger)">${issueSites.length}</div><div class="sched-stat-label">재고 이슈</div></div>
+      <div class="sched-stat"><div class="sched-stat-num" style="color:var(--danger)">${route.filter(s=>RAW.some(r=>r.납품처명===s.name&&r.출고일===date&&r.AS여부==='Y')).length}</div><div class="sched-stat-label">A/S 방문</div></div>
       <div class="sched-stat"><div class="sched-stat-num">${s.total_km>0?s.total_km+'km':'-'}</div><div class="sched-stat-label">예상 이동거리</div></div>
     </div>
 
@@ -2368,9 +2380,10 @@ function methodBadge(r){
   if(m.indexOf('노영호')>-1) return '<span class="badge badge-nh">노영호 차장</span>';
   return '<span class="badge badge-method">'+trunc(m,12)+'</span>';
 }
-function stockBadge(s){
-  if(s==='재고있음')return'<span class="badge badge-ok">재고✓</span>';
-  if(s==='재고없음')return'<span class="badge badge-issue">재고✗</span>';
+function stockBadge(s, qty){
+  const q = (qty===undefined||qty===null) ? '' : ' '+Number(qty).toLocaleString();
+  if(s==='재고있음')return`<span class="badge badge-ok" title="현재 재고${q||''}개">재고${q||'✓'}</span>`;
+  if(s==='재고없음')return`<span class="badge badge-issue" title="현재 재고${q||''}개 — 주문 수량보다 부족">재고${q||'✗'}<span style="font-weight:700;"> 부족</span></span>`;
   if(s==='해당없음')return'<span class="badge badge-na">서비스</span>';
   return'<span style="color:var(--text-muted);font-size:10px">-</span>';
 }
@@ -2442,7 +2455,6 @@ function renderSuggestions(){
       <td style="font-weight:500;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.site}">${trunc(s.site,18)}</td>
       <td><span class="badge badge-method" style="font-size:9px;">${s.sido}</span></td>
       <td class="mono">${s.items}건</td>
-      <td>${stockHtml(s.stock_ok,s.stock_none,s.items)}</td>
       <td>${s.driver?driverBadge(s.driver):'<span style="color:var(--text-muted);font-size:11px;">미지정</span>'}</td>
       <td><span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);">${s.recommended_date}</span></td>
       <td style="font-size:10px;color:var(--text-secondary);">${s.reasons.join(' · ')}</td>
@@ -2536,7 +2548,8 @@ function toggleAllSuggest(chk){
 }
 
 function goToCalendar(){
-  document.querySelectorAll('.tab-btn')[4].click();
+  const b=document.getElementById('tabbtn-calendar');
+  if(b) b.click();
 }
 
 // ══════════════════════════════════════════════════════
@@ -2586,8 +2599,8 @@ function clearDateFilter(){
 }
 
 function goToSchedule(){
-  const tabs = document.querySelectorAll(".tab-btn");
-  if(tabs[6]) tabs[6].click();
+  const b=document.getElementById('tabbtn-schedule');
+  if(b) b.click();
 }
 
 // 날짜 드롭다운 바깥 클릭 시 닫기
