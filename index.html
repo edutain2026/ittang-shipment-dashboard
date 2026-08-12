@@ -76,7 +76,7 @@ td.date{font-family:var(--mono);font-size:11px;}
 .badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;letter-spacing:.3px;}
 .badge-done{background:var(--success-light);color:var(--success);}
 .badge-wait{background:var(--warning-light);color:var(--warning);}
-.badge-as{background:var(--danger-light);color:var(--danger);}
+.badge-as{background:var(--danger);color:#fff;font-weight:700;}
 .badge-method{background:var(--accent-light);color:var(--accent);}
 .badge-jj{background:var(--jj-light);color:var(--jj);}
 .badge-nh{background:var(--nh-light);color:var(--nh);}
@@ -1012,6 +1012,20 @@ async function loadData() {
         r.AS여부='Y';
         if(r.납품처명 && r.납품처명.indexOf('A/S_')!==0) r.납품처명='A/S_'+r.납품처명;
       }
+    });
+    // 재고상태 계산: 가용재고현황의 품번(구/신)과 대조
+    const stockMap={};
+    STOCK.forEach(s=>{
+      [s.품번구, s.품번신].forEach(pn=>{
+        const k=String(pn||'').trim().toUpperCase();
+        if(k) stockMap[k]=(parseInt(s.재고수량)||0);
+      });
+    });
+    RAW.forEach(r=>{
+      if(r.AS여부==='Y'){ r.재고상태='해당없음'; return; }   // A/S 방문 건은 재고 무관
+      const k=String(r.품번||'').trim().toUpperCase();
+      if(!k || stockMap[k]===undefined){ r.재고상태='재고정보없음'; return; }
+      r.재고상태 = stockMap[k] >= (parseInt(r.수량)||0) ? '재고있음' : '재고없음';
     });
     // 파생 데이터 계산
     computeScheduleRoutesDates();
