@@ -28,13 +28,16 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .header-logo span{color:#6B9EFF;}
 .header-meta{font-size:11px;color:rgba(255,255,255,.5);font-family:var(--mono);}
 
-.tab-nav{background:var(--surface);border-bottom:1px solid var(--border);display:flex;padding:0 24px;overflow-x:auto;}
-.tab-btn{padding:12px 18px;border:none;background:none;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;white-space:nowrap;}
-.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:700;}
-.tab-btn:hover:not(.active){color:var(--text-primary);}
-/* 메인 탭 (납품 스케줄 · 동선 지도): 옅은 배경 + 진한 글자 강조 */
-.tab-btn.tab-main{background:var(--accent-light);color:var(--text-primary);font-weight:700;border-radius:8px 8px 0 0;margin-top:6px;}
-.tab-btn.tab-main.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-nav{background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center;padding:10px 24px;overflow-x:auto;}
+/* 탭: 4개씩 두 그룹 세그먼트 스타일 */
+.tab-group{display:flex;gap:2px;padding:4px;border-radius:10px;flex-shrink:0;}
+.tab-group-field{background:#FFF3D6;}   /* 현장 업무: 옅은 노랑 */
+.tab-group-view{background:#EFEEEA;}    /* 현황 조회: 옅은 회색 */
+.tab-btn{padding:8px 15px;border:none;background:transparent;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;border-radius:7px;transition:all .15s;white-space:nowrap;}
+.tab-btn:hover:not(.active){color:var(--text-primary);background:rgba(255,255,255,.55);}
+.tab-btn.active{background:#fff;color:var(--text-primary);font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.13);}
+.tab-group-field .tab-btn.active{color:#8A6400;}   /* 노랑 그룹 활성: 진한 앰버 */
+.tab-group-view .tab-btn.active{color:var(--accent);}
 
 .main{padding:20px 24px;max-width:1440px;margin:0 auto;}
 .tab-panel{display:none;}.tab-panel.active{display:block;}
@@ -261,14 +264,18 @@ td.date{font-family:var(--mono);font-size:11px;}
 </div>
 
 <div class="tab-nav">
-  <button class="tab-btn tab-main" id="tabbtn-schedule" onclick="showTab('schedule',this)">🚚 납품 스케줄</button>
-  <button class="tab-btn tab-main" onclick="showTab('map',this)">🗺 동선 지도</button>
-  <button class="tab-btn" id="tabbtn-calendar" onclick="showTab('calendar',this)">출고 달력</button>
-  <button class="tab-btn" onclick="showTab('shipment',this)">출고 지시</button>
-  <button class="tab-btn active" onclick="showTab('overview',this)">전체 현황</button>
-  <button class="tab-btn" onclick="showTab('stock',this)">재고 현황</button>
-  <button class="tab-btn" onclick="showTab('completed',this)">출고 완료</button>
-  <button class="tab-btn" onclick="showTab('autodate',this)">💡 출고일 추천</button>
+  <div class="tab-group tab-group-field">
+    <button class="tab-btn" id="tabbtn-schedule" onclick="showTab('schedule',this)">🚚 납품 스케줄</button>
+    <button class="tab-btn" onclick="showTab('map',this)">🗺 동선 지도</button>
+    <button class="tab-btn" id="tabbtn-calendar" onclick="showTab('calendar',this)">출고 달력</button>
+    <button class="tab-btn" onclick="showTab('shipment',this)">출고 지시</button>
+  </div>
+  <div class="tab-group tab-group-view">
+    <button class="tab-btn active" onclick="showTab('overview',this)">전체 현황</button>
+    <button class="tab-btn" onclick="showTab('stock',this)">재고 현황</button>
+    <button class="tab-btn" onclick="showTab('completed',this)">출고 완료</button>
+    <button class="tab-btn" onclick="showTab('autodate',this)">💡 출고일 추천</button>
+  </div>
 </div>
 
 <div class="main">
