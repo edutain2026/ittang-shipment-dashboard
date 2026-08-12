@@ -311,9 +311,9 @@ td.date{font-family:var(--mono);font-size:11px;}
       </div>
     </div>
     <label>출고담당</label><select id="filter-person" onchange="renderShipment()"><option value="">전체</option></select>
-    <label>상태</label>
+    <label>구분</label>
     <select id="filter-status" onchange="renderShipment()">
-      <option value="">전체</option><option value="대기">대기</option><option value="완료">완료</option><option value="AS">A/S</option>
+      <option value="">전체</option><option value="일반">일반</option><option value="AS">A/S</option>
     </select>
     <label>재고</label>
     <select id="filter-stock" onchange="renderShipment()">
@@ -1038,13 +1038,17 @@ function showTab(name,btn){
 // ── KPI ──
 function renderKPI(){
   const total=RAW.length;
-  const done=RAW.filter(r=>r.완료여부==='완료').length;
-  const wait=total-done;
+  // 이번 주 출고 예정 (월~일)
+  const today=new Date();
+  const mon=new Date(today); mon.setDate(today.getDate()-today.getDay()+1);
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+  const fmt=d=>d.toISOString().split('T')[0];
+  const thisWeek=RAW.filter(r=>r.출고일>=fmt(mon)&&r.출고일<=fmt(sun)).length;
   const stockIssue=RAW.filter(r=>r.재고상태==='재고없음').length;
   document.getElementById('kpi-row').innerHTML=`
-    <div class="kpi-card"><div class="kpi-label">전체 출고 지시</div><div class="kpi-value accent">${total}</div><div class="kpi-sub">건</div></div>
-    <div class="kpi-card"><div class="kpi-label">대기 중</div><div class="kpi-value warning">${wait}</div><div class="kpi-sub">건 미출고</div></div>
-    <div class="kpi-card"><div class="kpi-label">출고 완료</div><div class="kpi-value success">${done}</div><div class="kpi-sub">건 처리 완료</div></div>
+    <div class="kpi-card"><div class="kpi-label">전체 출고 지시</div><div class="kpi-value accent">${total}</div><div class="kpi-sub">건 (진행 중)</div></div>
+    <div class="kpi-card"><div class="kpi-label">이번 주 출고 예정</div><div class="kpi-value warning">${thisWeek}</div><div class="kpi-sub">건</div></div>
+    <div class="kpi-card"><div class="kpi-label">출고 완료 누적</div><div class="kpi-value success">${DONE.length}</div><div class="kpi-sub">건 (출고완료현황)</div></div>
     <div class="kpi-card"><div class="kpi-label">재고 부족</div><div class="kpi-value danger">${stockIssue}</div><div class="kpi-sub">건 출고 불가</div></div>`;
 }
 function renderBarChart(id,data,max){
@@ -1126,7 +1130,7 @@ function getFiltered(){
     if(selectedDates.length>0&&!selectedDates.includes(r.출고일))return false;
     if(person&&r.출고담당자!==person)return false;
     if(status==='AS'&&r.AS여부!=='Y')return false;
-    if(status&&status!=='AS'&&r.완료여부!==status)return false;
+    if(status==='일반'&&r.AS여부==='Y')return false;
     if(stockF&&r.재고상태!==stockF)return false;
     if(search&&!(r.납품처명.toLowerCase().includes(search)||r.품목명.toLowerCase().includes(search)||r.품번.toLowerCase().includes(search)))return false;
     return true;
@@ -1546,8 +1550,9 @@ function renderSchedDateList(){
     const hasIssue = filtered.some(site => site.stock_issues && site.stock_issues.length > 0);
     const jjCnt = route.filter(s=>s.driver==='전종복 부장').length;
     const nhCnt = route.filter(s=>s.driver==='노영호 차장').length;
-    const dateItems = RAW.filter(r => r.출고일 === date);
-    const allDone = dateItems.length > 0 && dateItems.every(r => r.완료여부 === '완료');
+    // 날짜의 모든 납품처가 서명 완료되면 ✅ 표시
+    const dateSites = [...new Set(RAW.filter(r=>r.출고일===date).map(r=>r.납품처명).filter(Boolean))];
+    const allDone = dateSites.length > 0 && dateSites.every(s => RECEIPTS.some(rc=>rc.납품처명===s && rc.출고일===date));
 
     const item = document.createElement('div');
     item.className = 'sched-date-item' + (date === currentSchedDate ? ' active' : '');
@@ -1651,14 +1656,12 @@ function renderSchedDetail(date){
     const rawItems = RAW.filter(r => r.납품처명===site.name && r.출고일===date);
     const signed = RECEIPTS.some(rc => rc.납품처명===site.name && rc.출고일===date);
     const totalItems = rawItems.length;
-    const doneItems = rawItems.filter(r=>r._done).length;
-    const allDone = totalItems > 0 && doneItems === totalItems;
-    const progress = totalItems > 0 ? Math.round(doneItems/totalItems*100) : 0;
+    const allDone = signed; // 서명 완료 = 납품 완료
 
     // 품목 상세 테이블
     const detailRows = rawItems.map((r,j)=>{
       const rawIdx = RAW.indexOf(r);
-      return `<div class="step-item-row ${r._done?'item-done':''}" id="item-row-${rawIdx}">
+      return `<div class="step-item-row" id="item-row-${rawIdx}">
         <span style="width:15px;display:inline-block;"></span>
         <span class="item-name">${r.품목명}</span>
         <span class="item-pn">${r.품번}</span>
@@ -2302,8 +2305,7 @@ function stockBadge(s){
 }
 function statusBadge(r){
   if(r.AS여부==='Y')return'<span class="badge badge-as">A/S</span>';
-  if(r.완료여부==='완료')return'<span class="badge badge-done">완료</span>';
-  return'<span class="badge badge-wait">대기</span>';
+  return'<span style="color:var(--text-muted);font-size:10px">-</span>';
 }
 // ── 주소에서 시구 추출 ──
 function extractSigu(addr){
