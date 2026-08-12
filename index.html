@@ -653,6 +653,17 @@ td.date{font-family:var(--mono);font-size:11px;}
   </div>
 </div>
 
+<!-- ── 달력 날짜 상세 팝업 ── -->
+<div id="day-detail-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:800;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:#fff;border-radius:10px;width:420px;max-width:94vw;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-size:14px;font-weight:700;" id="day-detail-title"></div>
+      <button onclick="document.getElementById('day-detail-overlay').style.display='none'" style="border:none;background:none;font-size:18px;cursor:pointer;color:var(--text-muted);">✕</button>
+    </div>
+    <div id="day-detail-body" style="overflow-y:auto;padding:8px 0;"></div>
+  </div>
+</div>
+
 <!-- ── 로그인 화면 ── -->
 <div id="login-overlay" style="display:none;position:fixed;inset:0;background:#1A1916;z-index:2000;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:12px;padding:36px 32px;width:340px;max-width:90vw;">
@@ -1250,6 +1261,31 @@ function buildCalMonthOptions(){
   sel.value=list.includes(nowMonth)?nowMonth:list[list.length-1];
 }
 
+// ── 달력 날짜 상세: 해당일 전체 납품처 팝업 ──
+function openDayDetail(dateStr){
+  const items=RAW.filter(r=>r.출고일===dateStr);
+  const siteMap={};
+  items.forEach(r=>{
+    if(!siteMap[r.납품처명]) siteMap[r.납품처명]={driver:r.출고담당자, count:0, qty:0};
+    siteMap[r.납품처명].count++;
+    siteMap[r.납품처명].qty+=parseInt(r.수량)||0;
+  });
+  const dc=dr=>dr==='전종복 부장'?'var(--jj)':dr==='노영호 차장'?'var(--nh)':'var(--text-muted)';
+  document.getElementById('day-detail-title').textContent=`${dateStr} 출고 — 납품처 ${Object.keys(siteMap).length}곳 · ${items.length}건`;
+  document.getElementById('day-detail-body').innerHTML=Object.entries(siteMap).map(([site,info])=>{
+    const signed=RECEIPTS.some(rc=>rc.납품처명===site && rc.출고일===dateStr);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:9px 18px;border-bottom:1px solid #F0EFE9;">
+      <span style="width:9px;height:9px;border-radius:50%;background:${dc(info.driver)};flex-shrink:0;"></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${site}</div>
+        <div style="font-size:11px;color:var(--text-muted);">${info.driver||'담당 미지정'} · 품목 ${info.count}건 · 수량 ${info.qty}개</div>
+      </div>
+      ${signed?'<span style="font-size:10px;background:var(--success-light);color:var(--success);padding:2px 7px;border-radius:3px;font-weight:500;flex-shrink:0;">✍️ 서명완료</span>':''}
+    </div>`;
+  }).join('') || '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:12px;">출고 건 없음</div>';
+  document.getElementById('day-detail-overlay').style.display='flex';
+}
+
 function renderCalendar(){
   const sel=document.getElementById('cal-month');
   if(!sel.options.length) buildCalMonthOptions();
@@ -1357,7 +1393,9 @@ function renderCalendar(){
     if(sites.length>3){
       const more=document.createElement('div');
       more.className='cal-more';
-      more.textContent=`+${sites.length-3}곳 더`;
+      more.textContent=`+${sites.length-3}곳 더보기`;
+      more.style.cssText='cursor:pointer;color:var(--accent);font-weight:500;';
+      more.onclick=(e)=>{ e.stopPropagation(); openDayDetail(dateStr); };
       cell.appendChild(more);
     }
 
