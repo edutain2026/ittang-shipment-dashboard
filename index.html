@@ -274,11 +274,6 @@ td.date{font-family:var(--mono);font-size:11px;}
 <div class="tab-panel active" id="tab-overview">
   <div class="kpi-row" id="kpi-row"></div>
   <div class="grid-2">
-    <div class="card"><div class="card-title">영업담당자별 출고 건수</div><div id="chart-sales"></div></div>
-    <div class="card"><div class="card-title">납품방법 분포</div><div id="chart-method"></div></div>
-  </div>
-  <div class="grid-2">
-    <div class="card"><div class="card-title">월별 출고 계획</div><div id="chart-monthly"></div></div>
     <div class="card">
       <div class="card-title">기간별 출고 조회</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0;">
@@ -289,6 +284,7 @@ td.date{font-family:var(--mono);font-size:11px;}
       </div>
       <div id="range-stats" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;"></div>
     </div>
+    <div class="card"><div class="card-title">월별 출고 계획</div><div id="chart-monthly"></div></div>
   </div>
   <div class="section-title">이번 주 출고 예정</div>
   <div class="table-wrap">
@@ -296,6 +292,10 @@ td.date{font-family:var(--mono);font-size:11px;}
       <thead><tr><th>출고일</th><th>납품처 / 시구</th><th>품목명</th><th>품번</th><th>수량</th><th>납품방법</th><th>영업담당</th><th>재고</th><th>상태</th></tr></thead>
       <tbody id="this-week-tbody"></tbody>
     </table>
+  </div>
+  <div class="grid-2" style="margin-top:14px;">
+    <div class="card"><div class="card-title">영업담당자별 출고 건수</div><div id="chart-sales"></div></div>
+    <div class="card"><div class="card-title">납품방법 분포</div><div id="chart-method"></div></div>
   </div>
 </div>
 
