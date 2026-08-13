@@ -307,7 +307,7 @@ td.date{font-family:var(--mono);font-size:11px;}
   <div class="section-title">이번 주 출고 예정</div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>출고일</th><th>납품처 / 시구</th><th>품목명</th><th>품번</th><th>수량</th><th>납품방법</th><th>영업담당</th><th>비고</th></tr></thead>
+      <thead><tr><th>출고일</th><th>납품처 / 시구</th><th>품목명</th><th>품번</th><th>수량</th><th>출고금액</th><th>납품방법</th><th>영업담당</th><th>비고</th></tr></thead>
       <tbody id="this-week-tbody"></tbody>
     </table>
   </div>
@@ -1152,7 +1152,7 @@ function renderThisWeek(){
   const fmt=d=>d.toISOString().split('T')[0];
   const items=RAW.filter(r=>r.출고일>=fmt(mon)&&r.출고일<=fmt(sun));
   const tbody=document.getElementById('this-week-tbody');
-  if(!items.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px">이번 주 출고 예정 없음</td></tr>';return;}
+  if(!items.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:24px">이번 주 출고 예정 없음</td></tr>';return;}
   tbody.innerHTML=items.map(r=>`<tr>
     <td class="date">${r.출고일}</td>
     <td>
@@ -1161,6 +1161,7 @@ function renderThisWeek(){
     </td>
     <td title="${r.품목명}">${trunc(r.품목명,18)}</td>
     <td class="mono">${r.품번}</td><td class="mono">${r.수량}</td>
+    <td class="mono" style="text-align:right">${r.출고금액?Number(r.출고금액).toLocaleString():'-'}</td>
     <td>${methodBadge(r)}</td><td>${r.영업담당자||'-'}</td>
     <td>${statusBadge(r)}</td></tr>`).join('');
 }
