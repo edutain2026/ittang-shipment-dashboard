@@ -257,6 +257,7 @@ td.date{font-family:var(--mono);font-size:11px;}
   .sched-date-list{display:flex;overflow-x:auto;overflow-y:hidden;max-height:none;-webkit-overflow-scrolling:touch;}
   .sched-date-item{min-width:150px;flex-shrink:0;border-bottom:none;border-right:1px solid #F0EFE9;}
   .sched-date-item.active{border-left:none;border-bottom:3px solid var(--accent);}
+  .hide-m{display:none;}   /* 모바일: 출고완료 표의 부가 열 숨김 */
 }
 </style>
 </head>
@@ -371,7 +372,7 @@ td.date{font-family:var(--mono);font-size:11px;}
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>완료일</th><th>납품처</th><th>거래처</th><th>품목명</th><th>품번</th><th>수량</th><th>납품방법</th><th>영업담당</th><th>출고증</th></tr></thead>
+      <thead><tr><th>완료일</th><th>납품처</th><th class="hide-m">거래처</th><th>품목명</th><th class="hide-m">품번</th><th>수량</th><th class="hide-m">납품방법</th><th class="hide-m">영업담당</th><th>출고증</th></tr></thead>
       <tbody id="done-tbody"></tbody>
     </table>
     <div class="pagination" id="done-pagination"></div>
@@ -1253,9 +1254,9 @@ function renderDonePage(){
     const btn=dd?`<button class="receipt-btn ${signed?'receipt-btn-done':''}" data-s="${r.납품처명}" data-d="${dd}" onclick="openReceipt(this.dataset.s,this.dataset.d,'done')" style="font-size:10px;padding:3px 8px;">${signed?'📄 완료':'✍️ 서명'}</button>`:'-';
     return `<tr>
     <td class="date">${r.출고완료일||'-'}</td><td title="${r.납품처명}">${trunc(r.납품처명,16)}</td>
-    <td title="${r.거래처명}">${trunc(r.거래처명,12)}</td><td title="${r.품목명}">${trunc(r.품목명,18)}</td>
-    <td class="mono">${r.품번||'-'}</td><td class="mono">${r.수량||'-'}</td>
-    <td>${r.납품방법||'-'}</td><td>${r.영업담당자||'-'}</td>
+    <td class="hide-m" title="${r.거래처명}">${trunc(r.거래처명,12)}</td><td title="${r.품목명}">${trunc(r.품목명,18)}</td>
+    <td class="mono hide-m">${r.품번||'-'}</td><td class="mono">${r.수량||'-'}</td>
+    <td class="hide-m">${r.납품방법||'-'}</td><td class="hide-m">${r.영업담당자||'-'}</td>
     <td>${btn}</td></tr>`;}).join('');
   renderPagination('done-pagination',Math.ceil(total/PAGE_SIZE),donePage,p=>{donePage=p;renderDonePage();});
 }
