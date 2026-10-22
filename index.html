@@ -371,7 +371,7 @@ td.date{font-family:var(--mono);font-size:11px;}
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>완료일</th><th>납품처</th><th>거래처</th><th>품목명</th><th>품번</th><th>수량</th><th>납품방법</th><th>영업담당</th></tr></thead>
+      <thead><tr><th>완료일</th><th>납품처</th><th>거래처</th><th>품목명</th><th>품번</th><th>수량</th><th>납품방법</th><th>영업담당</th><th>출고증</th></tr></thead>
       <tbody id="done-tbody"></tbody>
     </table>
     <div class="pagination" id="done-pagination"></div>
@@ -1247,11 +1247,16 @@ function renderDonePage(){
   const filtered=getDoneFiltered();const total=filtered.length;
   const items=filtered.slice((donePage-1)*PAGE_SIZE,donePage*PAGE_SIZE);
   document.getElementById('done-count').textContent=`${total}건`;
-  document.getElementById('done-tbody').innerHTML=items.map(r=>`<tr>
+  document.getElementById('done-tbody').innerHTML=items.map(r=>{
+    const dd=String(r.출고완료일||'').slice(0,10);
+    const signed=RECEIPTS.some(rc=>rc.납품처명===r.납품처명&&rc.출고일===dd);
+    const btn=dd?`<button class="receipt-btn ${signed?'receipt-btn-done':''}" data-s="${r.납품처명}" data-d="${dd}" onclick="openReceipt(this.dataset.s,this.dataset.d,'done')" style="font-size:10px;padding:3px 8px;">${signed?'📄 완료':'✍️ 서명'}</button>`:'-';
+    return `<tr>
     <td class="date">${r.출고완료일||'-'}</td><td title="${r.납품처명}">${trunc(r.납품처명,16)}</td>
     <td title="${r.거래처명}">${trunc(r.거래처명,12)}</td><td title="${r.품목명}">${trunc(r.품목명,18)}</td>
     <td class="mono">${r.품번||'-'}</td><td class="mono">${r.수량||'-'}</td>
-    <td>${r.납품방법||'-'}</td><td>${r.영업담당자||'-'}</td></tr>`).join('');
+    <td>${r.납품방법||'-'}</td><td>${r.영업담당자||'-'}</td>
+    <td>${btn}</td></tr>`;}).join('');
   renderPagination('done-pagination',Math.ceil(total/PAGE_SIZE),donePage,p=>{donePage=p;renderDonePage();});
 }
 
@@ -2629,12 +2634,15 @@ document.addEventListener("click", function(e){
 // ══════════════════════════════════
 // ── 출고증(인수확인서) 전자서명 ──
 // ══════════════════════════════════
-let rcSite = null, rcDate = null, rcItems = [];
+let rcSite = null, rcDate = null, rcItems = [], rcSrc = 'raw';
 let sigDrawn = false, sigCtx = null;
 
-function openReceipt(siteName, date){
-  rcSite = siteName; rcDate = date;
-  rcItems = RAW.filter(r => r.납품처명===siteName && r.출고일===date);
+function openReceipt(siteName, date, src){
+  rcSite = siteName; rcDate = date; rcSrc = src || 'raw';
+  // src='done'이면 출고완료현황에서 품목을 가져옴 (완료 처리된 과거 건도 서명 가능)
+  rcItems = (rcSrc === 'done')
+    ? DONE.filter(r => r.납품처명===siteName && String(r.출고완료일||'').slice(0,10)===date)
+    : RAW.filter(r => r.납품처명===siteName && r.출고일===date);
   if(rcItems.length===0){ alert('이 납품처의 품목 정보가 없습니다.'); return; }
 
   // 문서 채우기
@@ -2680,7 +2688,7 @@ async function resignReceipt(){
   const idx = RECEIPTS.indexOf(rec);
   if(idx>-1) RECEIPTS.splice(idx,1);
   if(currentSchedDate) renderSchedDetail(currentSchedDate);
-  openReceipt(rcSite, rcDate); // 새 서명 화면으로 다시 열기
+  openReceipt(rcSite, rcDate, rcSrc); // 새 서명 화면으로 다시 열기 (출처 유지)
 }
 
 function closeReceipt(){ document.getElementById('receipt-overlay').classList.remove('open'); }
@@ -2800,6 +2808,7 @@ async function submitReceipt(){
     // ③ 화면 갱신
     closeReceipt();
     if(currentSchedDate) renderSchedDetail(currentSchedDate);
+    renderDonePage();
     alert(`✅ 출고증 서명 완료\n\n${rcSite} (${rcDate})\n인수자: ${name}\n${GAS_PDF_URL?'PDF가 구글 드라이브 [출고증_PDF] 폴더에 저장되었습니다.':'PDF가 기기에 다운로드되었습니다.\n(드라이브 자동 저장은 웹앱 URL 설정 후 사용 가능)'}`);
   }catch(err){
     alert('저장 중 오류가 발생했습니다:\n'+err.message);
