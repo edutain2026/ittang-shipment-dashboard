@@ -607,9 +607,17 @@ const SUPABASE_KEY = 'sb_publishable_Q5xUJjK1pv1nNPsFmq-0DA_8a_KkJPP';
 const SB = {
   h: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
   async select(table, qs='') {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*${qs}&order=id`, { headers: {...this.h, 'Range':'0-9999'} });
-    if (!res.ok) throw new Error(`[${table}] ` + await res.text());
-    return res.json();
+    /* Supabase는 한 번에 최대 1000줄만 돌려줌 → 1000줄씩 나눠 끝까지 불러옴 (2026-10-30) */
+    const PAGE = 1000, all = [];
+    for (let from = 0; ; from += PAGE) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*${qs}&order=id`, { headers: {...this.h, 'Range': `${from}-${from + PAGE - 1}`} });
+      if (res.status===416) break;
+      if (!res.ok) throw new Error(`[${table}] ` + await res.text());
+      const rows = await res.json();
+      all.push(...rows);
+      if (rows.length < PAGE || from > 200000) break;
+    }
+    return all;
   },
   async update(table, id, data) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, { method:'PATCH', headers:this.h, body:JSON.stringify(data) });
